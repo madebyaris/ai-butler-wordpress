@@ -119,5 +119,136 @@ jQuery(document).ready(function($) {
 			}
 		});
 	});
+
+	// =========================================================================
+	// Background Jobs Page
+	// =========================================================================
+
+	// Retry job
+	$(document).on('click', '.abw-retry-job', function() {
+		if (typeof abwAdmin === 'undefined') return;
+		if (!confirm(abwAdmin.i18n ? abwAdmin.i18n.retry_confirm : 'Retry this job?')) return;
+
+		const $btn = $(this);
+		const jobId = $btn.data('job-id');
+		$btn.prop('disabled', true).text('Retrying...');
+
+		$.ajax({
+			url: abwAdmin.ajaxUrl,
+			type: 'POST',
+			data: {
+				action: 'abw_retry_job',
+				nonce: abwAdmin.nonce,
+				job_id: jobId,
+			},
+			success: function(response) {
+				if (response.success) {
+					// Update the row visually.
+					const $row = $btn.closest('tr');
+					$row.find('.abw-job-badge')
+						.removeClass('abw-job-badge-failed')
+						.addClass('abw-job-badge-pending')
+						.text('Pending');
+					$btn.remove();
+				} else {
+					alert(response.data?.message || 'Error retrying job');
+					$btn.prop('disabled', false).text('Retry');
+				}
+			},
+			error: function() {
+				alert(abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+				$btn.prop('disabled', false).text('Retry');
+			}
+		});
+	});
+
+	// Cancel job
+	$(document).on('click', '.abw-cancel-job', function() {
+		if (typeof abwAdmin === 'undefined') return;
+		if (!confirm(abwAdmin.i18n ? abwAdmin.i18n.cancel_confirm : 'Cancel this job?')) return;
+
+		const $btn = $(this);
+		const jobId = $btn.data('job-id');
+		$btn.prop('disabled', true).text('Cancelling...');
+
+		$.ajax({
+			url: abwAdmin.ajaxUrl,
+			type: 'POST',
+			data: {
+				action: 'abw_cancel_job',
+				nonce: abwAdmin.nonce,
+				job_id: jobId,
+			},
+			success: function(response) {
+				if (response.success) {
+					const $row = $btn.closest('tr');
+					$row.find('.abw-job-badge')
+						.removeClass('abw-job-badge-pending')
+						.addClass('abw-job-badge-cancelled')
+						.text('Cancelled');
+					$btn.remove();
+				} else {
+					alert(response.data?.message || 'Error cancelling job');
+					$btn.prop('disabled', false).text('Cancel');
+				}
+			},
+			error: function() {
+				alert(abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+				$btn.prop('disabled', false).text('Cancel');
+			}
+		});
+	});
+
+	// Auto-refresh for Background Jobs page
+	let jobsRefreshInterval = null;
+
+	function startJobsAutoRefresh() {
+		if (jobsRefreshInterval) return;
+		if (!$('#abw-jobs-table-container').length) return;
+
+		jobsRefreshInterval = setInterval(function() {
+			if (!$('#abw-jobs-auto-refresh').is(':checked')) return;
+			if (typeof abwAdmin === 'undefined') return;
+
+			$.ajax({
+				url: abwAdmin.ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'abw_admin_job_list',
+					nonce: abwAdmin.nonce,
+					page: 1,
+				},
+				success: function(response) {
+					if (!response.success) return;
+
+					// Reload the page if job statuses have changed.
+					// For simplicity, we do a full page reload every 5 seconds
+					// when auto-refresh is on and there are active (pending/processing) jobs.
+					const jobs = response.data.jobs || [];
+					const hasActive = jobs.some(function(j) {
+						return j.status === 'pending' || j.status === 'processing';
+					});
+
+					if (hasActive) {
+						location.reload();
+					}
+				}
+			});
+		}, 5000);
+	}
+
+	// Start auto-refresh if we're on the jobs page.
+	if ($('#abw-jobs-table-container').length || $('#abw-jobs-auto-refresh').length) {
+		startJobsAutoRefresh();
+	}
+
+	$('#abw-jobs-auto-refresh').on('change', function() {
+		if ($(this).is(':checked')) {
+			startJobsAutoRefresh();
+		} else if (jobsRefreshInterval) {
+			clearInterval(jobsRefreshInterval);
+			jobsRefreshInterval = null;
+		}
+	});
 });
 

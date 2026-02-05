@@ -11,7 +11,8 @@
 	const state = {
 		isOpen: false,
 		isLoading: false,
-		history: []
+		history: [],
+		activeJobs: {} // job_token => { interval, $element }
 	};
 
 	// DOM Elements
@@ -183,6 +184,13 @@
 				state.isLoading = false;
 
 				if (response.success) {
+					// Check if this is a background job response.
+					if (response.data.background_job) {
+						addMessage('assistant', response.data.response);
+						startJobPolling(response.data.background_job);
+						return;
+					}
+
 					// Add tool results if any (debug only)
 					if (
 						abwChat &&
@@ -586,6 +594,111 @@
 						</div>
 					`);
 				}
+			}
+		});
+	}
+
+	// -------------------------------------------------------------------------
+	// Background Job Polling
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Start polling for a background job status
+	 */
+	function startJobPolling(jobInfo) {
+		const token = jobInfo.job_token;
+		const jobType = jobInfo.job_type || 'background_task';
+
+		// Create a progress indicator in the chat.
+		const $progress = $(`
+			<div class="abw-message abw-message-assistant abw-job-progress" data-job-token="${escapeHtml(token)}">
+				<div class="abw-message-avatar">&#129302;</div>
+				<div class="abw-message-content">
+					<div class="abw-job-status-indicator">
+						<div class="abw-job-spinner"></div>
+						<span class="abw-job-status-text">Processing <strong>${escapeHtml(jobType.replace(/_/g, ' '))}</strong>...</span>
+					</div>
+					<div class="abw-job-meta">
+						<a href="${escapeHtml(abwChat.adminJobsUrl || '#')}" target="_blank" class="abw-job-link">View all jobs</a>
+					</div>
+				</div>
+			</div>
+		`);
+
+		$messages.append($progress);
+		scrollToBottom();
+
+		// Poll every 3 seconds.
+		const interval = setInterval(function() {
+			pollJobStatus(token, interval, $progress);
+		}, 3000);
+
+		state.activeJobs[token] = { interval: interval, $element: $progress };
+	}
+
+	/**
+	 * Poll a single job's status
+	 */
+	function pollJobStatus(token, interval, $progress) {
+		$.ajax({
+			url: abwChat.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'abw_check_job_status',
+				nonce: abwChat.nonce,
+				job_token: token
+			},
+			success: function(response) {
+				if (!response.success) {
+					return;
+				}
+
+				const data = response.data;
+
+				if (data.status === 'completed') {
+					// Stop polling.
+					clearInterval(interval);
+					delete state.activeJobs[token];
+
+					// Remove progress indicator.
+					$progress.remove();
+
+					// Show the result in chat.
+					if (data.result && data.result.response) {
+						addMessage('assistant', data.result.response);
+
+						// Show tool results if in debug mode.
+						if (
+							abwChat &&
+							abwChat.debugToolResults &&
+							data.result.tool_results &&
+							data.result.tool_results.length > 0
+						) {
+							data.result.tool_results.forEach(function(result) {
+								addToolResult(result.tool, result.result);
+							});
+						}
+					} else {
+						addMessage('assistant', 'Background task completed successfully.');
+					}
+				} else if (data.status === 'failed') {
+					// Stop polling.
+					clearInterval(interval);
+					delete state.activeJobs[token];
+
+					// Remove progress indicator and show error.
+					$progress.remove();
+					addErrorMessage(data.error || 'Background task failed. You can retry from the Background Jobs page.');
+				} else if (data.status === 'processing') {
+					// Update the status text.
+					$progress.find('.abw-job-status-text').html(
+						'Processing <strong>' + escapeHtml(data.job_type.replace(/_/g, ' ')) + '</strong>... (attempt ' + data.attempts + ')'
+					);
+				}
+				// 'pending' status: keep polling, Layer 3 will attempt inline processing.
+			},
+			error: function() {
+				// Network error, keep polling - will retry next interval.
 			}
 		});
 	}

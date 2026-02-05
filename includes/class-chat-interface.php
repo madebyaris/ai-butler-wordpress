@@ -146,14 +146,15 @@ class ABW_Chat_Interface {
 		}
 
 		wp_localize_script( 'abw-chat-widget', 'abwChat', [
-			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-			'nonce'       => wp_create_nonce( 'abw-chat' ),
-			'userId'      => get_current_user_id(),
-			'userName'    => wp_get_current_user()->display_name,
-			'siteName'    => get_bloginfo( 'name' ),
-			'currentPage' => self::get_current_page_context(),
+			'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+			'nonce'        => wp_create_nonce( 'abw-chat' ),
+			'userId'       => get_current_user_id(),
+			'userName'     => wp_get_current_user()->display_name,
+			'siteName'     => get_bloginfo( 'name' ),
+			'currentPage'  => self::get_current_page_context(),
 			'debugToolResults' => $debug_tool_results,
-			'i18n'        => [
+			'adminJobsUrl' => admin_url( 'admin.php?page=abw-ai-jobs' ),
+			'i18n'         => [
 				'title'       => __( 'ABW-AI Butler', 'abw-ai' ),
 				'placeholder' => __( 'Ask me anything about your WordPress site...', 'abw-ai' ),
 				'send'        => __( 'Send', 'abw-ai' ),
@@ -424,6 +425,34 @@ class ABW_Chat_Interface {
 		$tool_results = [];
 
 		if ( ! empty( $response['tool_calls'] ) ) {
+			// Check if any tool call is a long-running background operation.
+			$has_background_tool = self::has_background_tool_call( $response['tool_calls'] );
+
+			if ( $has_background_tool && class_exists( 'ABW_Background_Jobs' ) ) {
+				// Queue as a background job instead of blocking.
+				$job_result = self::queue_background_job( $user_id, $message, $messages, $tools, $response );
+
+				if ( ! is_wp_error( $job_result ) ) {
+					// Save the user message to history.
+					self::save_to_history( $user_id, 'user', $message );
+
+					$queued_msg = __( "I'm processing your request in the background. You can continue chatting while I work on it.", 'abw-ai' );
+					self::save_to_history( $user_id, 'assistant', $queued_msg );
+
+					wp_send_json_success( [
+						'response'       => $queued_msg,
+						'tool_results'   => [],
+						'background_job' => [
+							'job_token' => $job_result['job_token'],
+							'job_type'  => $job_result['job_type'],
+						],
+					] );
+					return;
+				}
+				// If queuing failed, fall through to synchronous processing.
+			}
+
+			// Synchronous processing for non-background tools or if queuing failed.
 			foreach ( $response['tool_calls'] as $tool_call ) {
 				$result = ABW_AI_Router::execute_tool( $tool_call['name'], $tool_call['arguments'] );
 				$tool_results[] = [
@@ -466,6 +495,63 @@ class ABW_Chat_Interface {
 			'response'     => $final_response,
 			'tool_results' => $tool_results,
 		] );
+	}
+
+	/**
+	 * Check if any tool call in the response is a long-running background operation.
+	 *
+	 * @param array $tool_calls Array of tool calls from AI response.
+	 * @return bool True if at least one tool is a background job type.
+	 */
+	private static function has_background_tool_call( array $tool_calls ): bool {
+		foreach ( $tool_calls as $tool_call ) {
+			if ( ABW_Background_Jobs::is_background_job_type( $tool_call['name'] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Queue a long-running AI operation as a background job.
+	 *
+	 * @param int    $user_id  User ID.
+	 * @param string $message  Original user message.
+	 * @param array  $messages Full message history for re-execution.
+	 * @param array  $tools    Available tools.
+	 * @param array  $response Initial AI response with tool calls.
+	 * @return array|WP_Error  Job info array or WP_Error on failure.
+	 */
+	private static function queue_background_job( int $user_id, string $message, array $messages, array $tools, array $response ) {
+		// Determine the primary job type from the tool calls.
+		$job_type = 'generate_post_content'; // Default.
+		foreach ( $response['tool_calls'] as $tool_call ) {
+			if ( ABW_Background_Jobs::is_background_job_type( $tool_call['name'] ) ) {
+				$job_type = $tool_call['name'];
+				break;
+			}
+		}
+
+		// Store all data needed to re-execute the job.
+		$input_data = [
+			'messages'   => $messages,
+			'tools'      => $tools,
+			'user_message' => $message,
+		];
+
+		$job = ABW_Background_Jobs::create_job( $user_id, $job_type, $input_data );
+
+		if ( is_wp_error( $job ) ) {
+			return $job;
+		}
+
+		// Dispatch for async processing.
+		ABW_Background_Jobs::dispatch_async( $job['job_id'] );
+
+		return [
+			'job_token' => $job['job_token'],
+			'job_type'  => $job_type,
+		];
 	}
 
 	/**

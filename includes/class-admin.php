@@ -46,13 +46,33 @@ class ABW_Admin {
 			'ayu-ai-settings',
 			[ __CLASS__, 'render_settings_page' ]
 		);
+
+		// Background Jobs page with pending count badge.
+		$pending_count = 0;
+		if ( class_exists( 'ABW_Background_Jobs' ) ) {
+			$counts = ABW_Background_Jobs::get_job_counts();
+			$pending_count = $counts[ ABW_Background_Jobs::STATUS_PENDING ]
+				+ $counts[ ABW_Background_Jobs::STATUS_PROCESSING ];
+		}
+		$badge = $pending_count > 0
+			? ' <span class="awaiting-mod">' . $pending_count . '</span>'
+			: '';
+
+		add_submenu_page(
+			'ayu-ai',
+			__( 'Background Jobs', 'abw-ai' ),
+			__( 'Background Jobs', 'abw-ai' ) . $badge,
+			'manage_options',
+			'abw-ai-jobs',
+			[ __CLASS__, 'render_jobs_page' ]
+		);
 	}
 
 	/**
 	 * Enqueue admin scripts
 	 */
 	public static function enqueue_scripts( $hook ) {
-		if ( strpos( $hook, 'ayu-ai' ) === false ) {
+		if ( strpos( $hook, 'ayu-ai' ) === false && strpos( $hook, 'abw-ai' ) === false ) {
 			return;
 		}
 
@@ -60,7 +80,20 @@ class ABW_Admin {
 		wp_enqueue_script( 'ayu-admin', ABW_URL . 'assets/admin.js', [ 'jquery' ], ABW_VERSION, true );
 		wp_localize_script( 'ayu-admin', 'ayuAdmin', [
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-			'nonce' => wp_create_nonce( 'ayu-admin' ),
+			'nonce'   => wp_create_nonce( 'ayu-admin' ),
+		] );
+
+		// Additional localized data for the background jobs page using the abw-admin nonce.
+		wp_localize_script( 'ayu-admin', 'abwAdmin', [
+			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+			'nonce'   => wp_create_nonce( 'abw-admin' ),
+			'i18n'    => [
+				'retry_confirm'  => __( 'Are you sure you want to retry this job?', 'abw-ai' ),
+				'cancel_confirm' => __( 'Are you sure you want to cancel this job?', 'abw-ai' ),
+				'retried'        => __( 'Job queued for retry.', 'abw-ai' ),
+				'cancelled'      => __( 'Job cancelled.', 'abw-ai' ),
+				'error'          => __( 'An error occurred. Please try again.', 'abw-ai' ),
+			],
 		] );
 	}
 
@@ -286,6 +319,149 @@ class ABW_Admin {
 				
 				<?php submit_button( __( 'Save Settings', 'abw-ai' ), 'primary', 'abw_save_settings' ); ?>
 			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the Background Jobs admin page.
+	 */
+	public static function render_jobs_page() {
+		if ( ! class_exists( 'ABW_Background_Jobs' ) ) {
+			echo '<div class="wrap"><h1>' . esc_html__( 'Background Jobs', 'abw-ai' ) . '</h1>';
+			echo '<p>' . esc_html__( 'Background Jobs system is not available.', 'abw-ai' ) . '</p></div>';
+			return;
+		}
+
+		$counts = ABW_Background_Jobs::get_job_counts();
+		$jobs   = ABW_Background_Jobs::get_recent_jobs( 50 );
+		$total  = array_sum( $counts );
+
+		$status_labels = [
+			ABW_Background_Jobs::STATUS_PENDING    => __( 'Pending', 'abw-ai' ),
+			ABW_Background_Jobs::STATUS_PROCESSING => __( 'Processing', 'abw-ai' ),
+			ABW_Background_Jobs::STATUS_COMPLETED  => __( 'Completed', 'abw-ai' ),
+			ABW_Background_Jobs::STATUS_FAILED     => __( 'Failed', 'abw-ai' ),
+			ABW_Background_Jobs::STATUS_CANCELLED  => __( 'Cancelled', 'abw-ai' ),
+		];
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Background Jobs', 'abw-ai' ); ?></h1>
+
+			<div class="abw-jobs-summary">
+				<div class="abw-jobs-stat abw-jobs-stat-total">
+					<span class="abw-jobs-stat-number"><?php echo esc_html( $total ); ?></span>
+					<span class="abw-jobs-stat-label"><?php esc_html_e( 'Total', 'abw-ai' ); ?></span>
+				</div>
+				<div class="abw-jobs-stat abw-jobs-stat-pending">
+					<span class="abw-jobs-stat-number"><?php echo esc_html( $counts[ ABW_Background_Jobs::STATUS_PENDING ] ); ?></span>
+					<span class="abw-jobs-stat-label"><?php esc_html_e( 'Pending', 'abw-ai' ); ?></span>
+				</div>
+				<div class="abw-jobs-stat abw-jobs-stat-processing">
+					<span class="abw-jobs-stat-number"><?php echo esc_html( $counts[ ABW_Background_Jobs::STATUS_PROCESSING ] ); ?></span>
+					<span class="abw-jobs-stat-label"><?php esc_html_e( 'Processing', 'abw-ai' ); ?></span>
+				</div>
+				<div class="abw-jobs-stat abw-jobs-stat-completed">
+					<span class="abw-jobs-stat-number"><?php echo esc_html( $counts[ ABW_Background_Jobs::STATUS_COMPLETED ] ); ?></span>
+					<span class="abw-jobs-stat-label"><?php esc_html_e( 'Completed', 'abw-ai' ); ?></span>
+				</div>
+				<div class="abw-jobs-stat abw-jobs-stat-failed">
+					<span class="abw-jobs-stat-number"><?php echo esc_html( $counts[ ABW_Background_Jobs::STATUS_FAILED ] ); ?></span>
+					<span class="abw-jobs-stat-label"><?php esc_html_e( 'Failed', 'abw-ai' ); ?></span>
+				</div>
+			</div>
+
+			<?php if ( empty( $jobs ) ) : ?>
+				<div class="abw-empty-state">
+					<div class="abw-empty-icon">
+						<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+							<rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+							<path d="M9 14l2 2 4-4"></path>
+						</svg>
+					</div>
+					<h2><?php esc_html_e( 'No Background Jobs Yet', 'abw-ai' ); ?></h2>
+					<p><?php esc_html_e( 'When you ask the AI to create content, generate posts, or perform other long-running tasks, they will appear here.', 'abw-ai' ); ?></p>
+				</div>
+			<?php else : ?>
+				<div class="abw-jobs-container" id="abw-jobs-table-container">
+					<table class="abw-jobs-table">
+						<thead>
+							<tr>
+								<th class="abw-col-id"><?php esc_html_e( 'ID', 'abw-ai' ); ?></th>
+								<th class="abw-col-type"><?php esc_html_e( 'Job Type', 'abw-ai' ); ?></th>
+								<th class="abw-col-user"><?php esc_html_e( 'User', 'abw-ai' ); ?></th>
+								<th class="abw-col-status"><?php esc_html_e( 'Status', 'abw-ai' ); ?></th>
+								<th class="abw-col-attempts"><?php esc_html_e( 'Attempts', 'abw-ai' ); ?></th>
+								<th class="abw-col-time"><?php esc_html_e( 'Created', 'abw-ai' ); ?></th>
+								<th class="abw-col-actions"><?php esc_html_e( 'Actions', 'abw-ai' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $jobs as $job ) :
+								$user_data = get_userdata( (int) $job->user_id );
+								$user_name = $user_data ? $user_data->display_name : __( 'Unknown', 'abw-ai' );
+								$status_class = 'abw-job-status-' . esc_attr( $job->status );
+								?>
+								<tr class="<?php echo esc_attr( $status_class ); ?>" data-job-id="<?php echo esc_attr( $job->id ); ?>">
+									<td class="abw-col-id">#<?php echo esc_html( $job->id ); ?></td>
+									<td class="abw-col-type">
+										<span class="abw-tool-name"><?php echo esc_html( $job->job_type ); ?></span>
+									</td>
+									<td class="abw-col-user"><?php echo esc_html( $user_name ); ?></td>
+									<td class="abw-col-status">
+										<span class="abw-job-badge abw-job-badge-<?php echo esc_attr( $job->status ); ?>">
+											<?php echo esc_html( $status_labels[ $job->status ] ?? $job->status ); ?>
+										</span>
+										<?php if ( ! empty( $job->error_message ) ) : ?>
+											<span class="abw-job-error-hint" title="<?php echo esc_attr( $job->error_message ); ?>">&#9432;</span>
+										<?php endif; ?>
+									</td>
+									<td class="abw-col-attempts">
+										<?php echo esc_html( $job->attempts . '/' . $job->max_attempts ); ?>
+									</td>
+									<td class="abw-col-time">
+										<span class="abw-time-primary"><?php echo esc_html( wp_date( 'M j, H:i', strtotime( $job->created_at ) ) ); ?></span>
+										<?php if ( $job->completed_at ) : ?>
+											<span class="abw-time-secondary"><?php echo esc_html( human_time_diff( strtotime( $job->created_at ), strtotime( $job->completed_at ) ) ); ?></span>
+										<?php endif; ?>
+									</td>
+									<td class="abw-col-actions">
+										<?php if ( ABW_Background_Jobs::STATUS_FAILED === $job->status ) : ?>
+											<button class="button button-small abw-retry-job" data-job-id="<?php echo esc_attr( $job->id ); ?>">
+												<?php esc_html_e( 'Retry', 'abw-ai' ); ?>
+											</button>
+										<?php endif; ?>
+										<?php if ( ABW_Background_Jobs::STATUS_PENDING === $job->status ) : ?>
+											<button class="button button-small abw-cancel-job" data-job-id="<?php echo esc_attr( $job->id ); ?>">
+												<?php esc_html_e( 'Cancel', 'abw-ai' ); ?>
+											</button>
+										<?php endif; ?>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<div class="abw-jobs-footer">
+				<p class="abw-jobs-auto-refresh">
+					<label>
+						<input type="checkbox" id="abw-jobs-auto-refresh" checked />
+						<?php esc_html_e( 'Auto-refresh every 5 seconds', 'abw-ai' ); ?>
+					</label>
+				</p>
+				<p class="description">
+					<?php
+					printf(
+						/* translators: %s: PHP max execution time */
+						esc_html__( 'Server max execution time: %s seconds', 'abw-ai' ),
+						esc_html( (string) ini_get( 'max_execution_time' ) )
+					);
+					?>
+				</p>
+			</div>
 		</div>
 		<?php
 	}

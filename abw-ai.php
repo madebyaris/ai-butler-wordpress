@@ -28,9 +28,13 @@ define( 'ABW_INCLUDES', ABW_PATH . 'includes/' );
 require_once ABW_INCLUDES . 'class-admin.php';
 require_once ABW_INCLUDES . 'class-elementor-rest-api.php';
 require_once ABW_INCLUDES . 'class-abilities-registration.php';
+require_once ABW_INCLUDES . 'class-background-jobs.php';
 require_once ABW_INCLUDES . 'class-ai-router.php';
 require_once ABW_INCLUDES . 'class-ai-tools.php';
 require_once ABW_INCLUDES . 'class-chat-interface.php';
+
+// Register custom cron schedules early (before init).
+add_filter( 'cron_schedules', [ 'ABW_Background_Jobs', 'add_cron_schedules' ] );
 
 /**
  * Initialize plugin
@@ -39,6 +43,7 @@ function abw_ai_init() {
 	ABW_Admin::init();
 	ABW_Elementor_REST_API::init();
 	ABW_Abilities_Registration::init();
+	ABW_Background_Jobs::init();
 	ABW_Chat_Interface::init();
 }
 add_action( 'plugins_loaded', 'abw_ai_init' );
@@ -60,8 +65,20 @@ function abw_ai_activate() {
 			$user->add_cap( 'use_abw' );
 		}
 	}
+
+	// Create background jobs table.
+	ABW_Background_Jobs::create_table();
 }
 register_activation_hook( __FILE__, 'abw_ai_activate' );
+
+/**
+ * Deactivation hook
+ */
+function abw_ai_deactivate() {
+	// Clear background jobs cron events.
+	ABW_Background_Jobs::deactivate();
+}
+register_deactivation_hook( __FILE__, 'abw_ai_deactivate' );
 
 /**
  * Uninstall hook
@@ -74,5 +91,8 @@ function abw_ai_uninstall() {
 	delete_option( 'abw_openai_api_key' );
 	delete_option( 'abw_anthropic_api_key' );
 	delete_option( 'abw_audit_logs' );
+
+	// Drop background jobs table and clean up.
+	ABW_Background_Jobs::drop_table();
 }
 register_uninstall_hook( __FILE__, 'abw_ai_uninstall' );
