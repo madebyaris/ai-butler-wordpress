@@ -1,0 +1,596 @@
+/**
+ * ABW-AI Chat Widget JavaScript
+ *
+ * Handles the sidebar toggle, chat interface interactions and API communication.
+ */
+
+(function($) {
+	'use strict';
+
+	// State
+	const state = {
+		isOpen: false,
+		isLoading: false,
+		history: []
+	};
+
+	// DOM Elements
+	let $sidebar, $messages, $input, $sendBtn;
+
+	/**
+	 * Initialize the chat widget
+	 */
+	function init() {
+		$sidebar = $('#abw-sidebar-container');
+		$messages = $('#abw-chat-messages');
+		$input = $('#abw-chat-input');
+		$sendBtn = $('#abw-chat-send');
+
+		if (!$sidebar.length) return;
+
+		// Check initial state from localStorage
+		const savedState = localStorage.getItem('abw_sidebar_state');
+		const defaultState = $sidebar.attr('aria-hidden') === 'false' ? 'open' : 'closed';
+		const shouldBeOpen = (savedState || defaultState) === 'open';
+
+		if (shouldBeOpen) {
+			toggleSidebar(true, false); // Open without animation on load
+		}
+
+		bindEvents();
+		loadHistory();
+	}
+
+	/**
+	 * Bind event handlers
+	 */
+	function bindEvents() {
+		// Admin bar toggle (works for both standard admin bar and Elementor fallback)
+		$(document).on('click', '#wp-admin-bar-abw-sidebar-toggle a, .abw-sidebar-toggle-item a', function(e) {
+			e.preventDefault();
+			toggleSidebar();
+		});
+
+		// Send message
+		$sendBtn.on('click', sendMessage);
+		$input.on('keydown', function(e) {
+			if (e.key === 'Enter' && !e.shiftKey) {
+				e.preventDefault();
+				sendMessage();
+			}
+		});
+
+		// Auto-resize textarea
+		$input.on('input', autoResize);
+
+		// Clear history
+		$('#abw-clear-chat').on('click', clearHistory);
+
+		// Suggestions
+		$(document).on('click', '.abw-suggestion', function() {
+			const prompt = $(this).data('prompt');
+			$input.val(prompt).focus();
+			autoResize.call($input[0]);
+		});
+
+		// Close sidebar on escape key
+		$(document).on('keydown', function(e) {
+			if (e.key === 'Escape' && state.isOpen) {
+				toggleSidebar(false);
+			}
+		});
+
+		// Reasoning toggle
+		$(document).on('click', '.abw-reasoning-toggle', function() {
+			const $toggle = $(this);
+			const $content = $toggle.siblings('.abw-reasoning-content');
+			const $icon = $toggle.find('.abw-reasoning-icon');
+			const isExpanded = $toggle.attr('aria-expanded') === 'true';
+			
+			$content.slideToggle(200);
+			$toggle.attr('aria-expanded', !isExpanded);
+			$icon.text(isExpanded ? '▼' : '▲');
+		});
+	}
+
+	/**
+	 * Initialize reasoning toggles
+	 */
+	function initReasoningToggles() {
+		$('.abw-reasoning-toggle').each(function() {
+			const $toggle = $(this);
+			if (!$toggle.data('initialized')) {
+				$toggle.data('initialized', true);
+				// Toggle is already bound via document.on('click')
+			}
+		});
+	}
+
+	/**
+	 * Toggle sidebar visibility (Angie-style push layout)
+	 */
+	function toggleSidebar(forceOpen, animate = true) {
+		const html = document.documentElement;
+		const body = document.body;
+
+		if (forceOpen !== undefined) {
+			state.isOpen = forceOpen;
+		} else {
+			state.isOpen = !state.isOpen;
+		}
+
+		// Add transition class for smooth animation
+		if (animate) {
+			body.classList.add('abw-sidebar-transitioning');
+			setTimeout(function() {
+				body.classList.remove('abw-sidebar-transitioning');
+			}, 300);
+		}
+
+		// Toggle classes
+		if (state.isOpen) {
+			html.classList.add('abw-sidebar-active');
+			body.classList.add('abw-sidebar-active');
+			$sidebar.attr('aria-hidden', 'false');
+			
+			// Focus input when opened
+			setTimeout(function() {
+				$input.focus();
+				scrollToBottom();
+			}, 100);
+		} else {
+			html.classList.remove('abw-sidebar-active');
+			body.classList.remove('abw-sidebar-active');
+			$sidebar.attr('aria-hidden', 'true');
+		}
+
+		// Save state to localStorage
+		try {
+			localStorage.setItem('abw_sidebar_state', state.isOpen ? 'open' : 'closed');
+		} catch (e) {
+			// localStorage not available
+		}
+	}
+
+	/**
+	 * Send a message
+	 */
+	function sendMessage() {
+		const message = $input.val().trim();
+		
+		if (!message || state.isLoading) return;
+
+		// Add user message to UI
+		addMessage('user', message);
+		$input.val('').css('height', 'auto');
+
+		// Show typing indicator
+		showTypingIndicator();
+		state.isLoading = true;
+
+		// Send to server
+		$.ajax({
+			url: abwChat.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'abw_chat_message',
+				nonce: abwChat.nonce,
+				message: message,
+				context: JSON.stringify(abwChat.currentPage)
+			},
+			success: function(response) {
+				hideTypingIndicator();
+				state.isLoading = false;
+
+				if (response.success) {
+					// Add tool results if any (debug only)
+					if (
+						abwChat &&
+						abwChat.debugToolResults &&
+						response.data.tool_results &&
+						response.data.tool_results.length > 0
+					) {
+						response.data.tool_results.forEach(function(result) {
+							addToolResult(result.tool, result.result);
+						});
+					}
+					
+					// Add assistant response
+					addMessage('assistant', response.data.response);
+				} else {
+					addErrorMessage(response.data.message || abwChat.i18n.error);
+				}
+			},
+			error: function() {
+				hideTypingIndicator();
+				state.isLoading = false;
+				addErrorMessage(abwChat.i18n.error);
+			}
+		});
+	}
+
+	/**
+	 * Add a message to the chat
+	 */
+	function addMessage(role, content) {
+		// Remove welcome message if exists
+		$('.abw-chat-welcome').remove();
+
+		const avatarContent = role === 'user' 
+			? abwChat.userName.charAt(0).toUpperCase() 
+			: '🤖';
+
+		const $message = $(`
+			<div class="abw-message abw-message-${role}">
+				<div class="abw-message-avatar">${avatarContent}</div>
+				<div class="abw-message-content">${formatMessage(content)}</div>
+			</div>
+		`);
+
+		$messages.append($message);
+		scrollToBottom();
+	}
+
+	/**
+	 * Add tool result to chat
+	 */
+	function addToolResult(tool, result) {
+		const formattedResult = typeof result === 'object' 
+			? JSON.stringify(result, null, 2) 
+			: result;
+
+		const $result = $(`
+			<div class="abw-tool-result">
+				<div class="abw-tool-result-label">Tool: ${escapeHtml(tool)}</div>
+				<pre>${escapeHtml(formattedResult)}</pre>
+			</div>
+		`);
+
+		$messages.append($result);
+	}
+
+	/**
+	 * Add error message
+	 */
+	function addErrorMessage(message) {
+		const $error = $(`
+			<div class="abw-error-message">${escapeHtml(message)}</div>
+		`);
+
+		$messages.append($error);
+		scrollToBottom();
+	}
+
+	/**
+	 * Show typing indicator
+	 */
+	function showTypingIndicator() {
+		const $typing = $(`
+			<div class="abw-message abw-message-assistant abw-typing-message">
+				<div class="abw-message-avatar">🤖</div>
+				<div class="abw-message-content">
+					<div class="abw-typing">
+						<span class="abw-typing-dot"></span>
+						<span class="abw-typing-dot"></span>
+						<span class="abw-typing-dot"></span>
+					</div>
+				</div>
+			</div>
+		`);
+
+		$messages.append($typing);
+		scrollToBottom();
+	}
+
+	/**
+	 * Hide typing indicator
+	 */
+	function hideTypingIndicator() {
+		$('.abw-typing-message').remove();
+	}
+
+	/**
+	 * Format message content (basic markdown support)
+	 */
+	function formatMessage(content) {
+		if (!content) return '';
+
+		// Normalize newlines
+		content = String(content).replace(/\r\n?/g, '\n');
+
+		// Remove reasoning tags completely (defense in depth, server should also strip)
+		content = content.replace(/<think>([\s\S]*?)<\/think>/gi, '');
+		content = content.replace(/<think>([\s\S]*?)<\/redacted_reasoning>/gi, '');
+
+		// Extract fenced code blocks first, then escape everything else (prevents HTML leakage)
+		const codeBlocks = [];
+		content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, function(_match, lang, code) {
+			const id = codeBlocks.length;
+			codeBlocks.push({
+				lang: (lang || 'text').trim() || 'text',
+				code: (code || '').replace(/\n$/, '')
+			});
+			return `%%ABW_CODEBLOCK_${id}%%`;
+		});
+
+		// Escape all remaining content up front
+		const escaped = escapeHtml(content);
+
+		// Inline markdown (runs on escaped text, so inserted HTML is safe)
+		function safeHref(rawHref) {
+			const href = String(rawHref || '').trim();
+			if (!href) return '#';
+			// allow http(s), mailto, tel, and simple relative links
+			if (/^(https?:\/\/|mailto:|tel:)/i.test(href)) return href;
+			if (/^(\/|#)/.test(href)) return href;
+			return '#';
+		}
+
+		function inlineFormat(text) {
+			let out = text;
+
+			// Links: [text](url)
+			out = out.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function(_m, label, href) {
+				const safe = safeHref(href);
+				return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+			});
+
+			// Inline code: `code`
+			out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+			// Bold: **text**
+			out = out.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+
+			// Italic: *text* (avoid matching **bold** by requiring non-* prefix)
+			out = out.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+
+			return out;
+		}
+
+		// Block-level markdown: headers, lists, paragraphs
+		const lines = escaped.split('\n');
+		let html = '';
+		let listType = null; // 'ul' | 'ol' | null
+		let paragraph = [];
+
+		function splitTableRow(rowLine) {
+			// Strip leading/trailing pipes to avoid empty first/last cells
+			const row = rowLine.trim().replace(/^\|/, '').replace(/\|$/, '');
+			return row.split('|').map((c) => c.trim());
+		}
+
+		function isTableSeparatorRow(rowLine) {
+			if (!rowLine) return false;
+			const trimmed = rowLine.trim();
+			if (!trimmed.includes('|')) return false;
+			const cells = splitTableRow(trimmed);
+			if (cells.length < 2) return false;
+			return cells.every((c) => /^:?-{3,}:?$/.test(c));
+		}
+
+		function flushParagraph() {
+			if (paragraph.length === 0) return;
+			const text = inlineFormat(paragraph.join('<br>'));
+			html += `<p>${text}</p>`;
+			paragraph = [];
+		}
+
+		function closeList() {
+			if (!listType) return;
+			html += `</${listType}>`;
+			listType = null;
+		}
+
+		function openList(nextType) {
+			if (listType === nextType) return;
+			closeList();
+			listType = nextType;
+			html += `<${listType}>`;
+		}
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const trimmed = line.trim();
+
+			// Blank line: end paragraph / lists
+			if (trimmed === '') {
+				flushParagraph();
+				closeList();
+				continue;
+			}
+
+			// Markdown table (pipe table): header row + separator row, followed by body rows
+			if (
+				trimmed.includes('|') &&
+				i + 1 < lines.length &&
+				isTableSeparatorRow(lines[i + 1].trim())
+			) {
+				flushParagraph();
+				closeList();
+
+				const headerCells = splitTableRow(trimmed);
+				// Consume separator row (i + 1)
+				i += 1;
+
+				let tableHtml = '<table class="abw-md-table"><thead><tr>';
+				headerCells.forEach((cell) => {
+					tableHtml += `<th>${inlineFormat(cell)}</th>`;
+				});
+				tableHtml += '</tr></thead><tbody>';
+
+				// Consume body rows until blank line or non-table-ish line
+				while (i + 1 < lines.length) {
+					const nextLine = lines[i + 1];
+					const nextTrimmed = nextLine.trim();
+					if (nextTrimmed === '') break;
+					// Stop if we hit a codeblock placeholder or a header/list start; keeps parsing predictable
+					if (/^%%ABW_CODEBLOCK_\d+%%$/.test(nextTrimmed)) break;
+					if (/^#{1,3}\s+/.test(nextTrimmed)) break;
+					if (/^\s*[-*]\s+/.test(nextTrimmed)) break;
+					if (/^\s*\d+\.\s+/.test(nextTrimmed)) break;
+					if (!nextTrimmed.includes('|')) break;
+
+					i += 1;
+					const rowCells = splitTableRow(nextTrimmed);
+					tableHtml += '<tr>';
+					headerCells.forEach((_, idx) => {
+						tableHtml += `<td>${inlineFormat(rowCells[idx] || '')}</td>`;
+					});
+					tableHtml += '</tr>';
+				}
+
+				tableHtml += '</tbody></table>';
+				html += tableHtml;
+				continue;
+			}
+
+			// Codeblock placeholder (block element)
+			const cbMatch = trimmed.match(/^%%ABW_CODEBLOCK_(\d+)%%$/);
+			if (cbMatch) {
+				flushParagraph();
+				closeList();
+				html += trimmed; // replace later
+				continue;
+			}
+
+			// Headers
+			const h3 = line.match(/^###\s+(.+)$/);
+			const h2 = line.match(/^##\s+(.+)$/);
+			const h1 = line.match(/^#\s+(.+)$/);
+			if (h3 || h2 || h1) {
+				flushParagraph();
+				closeList();
+				if (h3) html += `<h3>${inlineFormat(h3[1])}</h3>`;
+				else if (h2) html += `<h2>${inlineFormat(h2[1])}</h2>`;
+				else html += `<h1>${inlineFormat(h1[1])}</h1>`;
+				continue;
+			}
+
+			// Unordered list item
+			const ulItem = line.match(/^\s*[-*]\s+(.+)$/);
+			if (ulItem) {
+				flushParagraph();
+				openList('ul');
+				html += `<li>${inlineFormat(ulItem[1])}</li>`;
+				continue;
+			}
+
+			// Ordered list item
+			const olItem = line.match(/^\s*\d+\.\s+(.+)$/);
+			if (olItem) {
+				flushParagraph();
+				openList('ol');
+				html += `<li>${inlineFormat(olItem[1])}</li>`;
+				continue;
+			}
+
+			// Default: accumulate paragraph lines
+			closeList();
+			paragraph.push(line);
+		}
+
+		flushParagraph();
+		closeList();
+
+		// Restore code blocks (safe: code is escaped when injected)
+		html = html.replace(/%%ABW_CODEBLOCK_(\d+)%%/g, function(_m, idxStr) {
+			const idx = Number(idxStr);
+			const block = codeBlocks[idx];
+			if (!block) return '';
+			const lang = escapeHtml(block.lang);
+			const code = escapeHtml(block.code);
+			return `<pre><code class="language-${lang}">${code}</code></pre>`;
+		});
+
+		return html;
+	}
+
+	/**
+	 * Escape HTML entities
+	 */
+	function escapeHtml(text) {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
+	/**
+	 * Scroll messages to bottom
+	 */
+	function scrollToBottom() {
+		if ($messages.length && $messages[0]) {
+			$messages.scrollTop($messages[0].scrollHeight);
+		}
+	}
+
+	/**
+	 * Auto-resize textarea
+	 */
+	function autoResize() {
+		this.style.height = 'auto';
+		this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+	}
+
+	/**
+	 * Load chat history
+	 */
+	function loadHistory() {
+		$.ajax({
+			url: abwChat.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'abw_chat_history',
+				nonce: abwChat.nonce
+			},
+			success: function(response) {
+				if (response.success && response.data.history && response.data.history.length > 0) {
+					// Remove welcome message
+					$('.abw-chat-welcome').remove();
+
+					// Add history messages
+					response.data.history.forEach(function(msg) {
+						addMessage(msg.role, msg.content);
+					});
+				}
+			}
+		});
+	}
+
+	/**
+	 * Clear chat history
+	 */
+	function clearHistory() {
+		if (!confirm('Are you sure you want to clear the chat history?')) {
+			return;
+		}
+
+		$.ajax({
+			url: abwChat.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'abw_clear_chat',
+				nonce: abwChat.nonce
+			},
+			success: function(response) {
+				if (response.success) {
+					// Clear messages and show welcome
+					$messages.html(`
+						<div class="abw-chat-welcome">
+							<p>Hi! I'm your Advanced Butler for WordPress. How can I help you today?</p>
+							<div class="abw-chat-suggestions">
+								<button class="abw-suggestion" data-prompt="List all my posts">List all posts</button>
+								<button class="abw-suggestion" data-prompt="Create a new blog post about">Create a post</button>
+								<button class="abw-suggestion" data-prompt="Show me site health info">Site health</button>
+								<button class="abw-suggestion" data-prompt="List installed plugins">List plugins</button>
+							</div>
+						</div>
+					`);
+				}
+			}
+		});
+	}
+
+	// Initialize when DOM is ready
+	$(document).ready(init);
+
+})(jQuery);

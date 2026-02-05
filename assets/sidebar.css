@@ -1,0 +1,263 @@
+/**
+ * ABW-AI Sidebar Styles
+ * 
+ * Push layout sidebar similar to Angie, with RTL support and responsive behavior.
+ */
+
+body.admin-bar {
+	--abw-sidebar-z-index: 99999; /* above WP admin bar */
+}
+
+#abw-body-top-padding {
+	height: 0;
+	transition: height 0.3s ease-in-out;
+}
+
+body.abw-sidebar-transitioning #wpadminbar {
+	transition: var(--abw-sidebar-transition) !important;
+}
+
+/* Sidebar Container */
+#abw-sidebar-container {
+	position: fixed;
+	top: 0;
+	inset-inline-start: 0;
+	width: var(--abw-sidebar-width, 370px);
+	height: 100vh;
+	background: #ffffff;
+	border-inline-end: 1px solid #e2e8f0;
+	z-index: var(--abw-sidebar-z-index, 99999);
+	display: flex;
+	flex-direction: column;
+	transform: translateX(calc(-1 * var(--abw-sidebar-width, 370px)));
+	transition: transform 0.3s ease-in-out;
+	box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+html[dir="rtl"] #abw-sidebar-container {
+	transform: translateX(var(--abw-sidebar-width, 370px));
+}
+
+body.abw-sidebar-active #abw-sidebar-container {
+	transform: translateX(0);
+}
+
+/* Sidebar Content */
+#abw-sidebar-content {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Screen reader only */
+.abw-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+/* LTR Layout (default) - Push content to the right */
+@media (min-width: 768px) {
+	body.abw-sidebar-active #abw-body-top-padding {
+		width: 100%;
+		height: 8px;
+	}
+
+	/* Push WordPress Admin Bar - LTR */
+	body.abw-sidebar-active #wpadminbar {
+		inset-inline-start: var(--abw-sidebar-width, 370px) !important;
+		inset-inline-end: 8px !important;
+		width: calc(100% - 8px - var(--abw-sidebar-width, 370px)) !important;
+		margin-top: 8px;
+	}
+
+	body.abw-sidebar-active #wpfooter {
+		bottom: 8px !important;
+	}
+
+	body.abw-sidebar-active #adminmenuback {
+		top: 8px !important;
+	}
+
+	html.abw-sidebar-active {
+		margin-inline-end: 8px !important;
+	}
+
+	body.abw-sidebar-active #adminmenuwrap {
+		margin-bottom: 8px;
+	}
+
+	body.abw-sidebar-active #abw-wrapper {
+		--abw-wrapper-border-width: 1px;
+		position: fixed;
+		top: 8px;
+		inset-inline-start: var(--abw-sidebar-width, 370px);
+		width: calc(100% - 7px - (var(--abw-wrapper-border-width) * 2) - var(--abw-sidebar-width, 370px));
+		height: calc(100% - 17px);
+		z-index: var(--abw-sidebar-z-index, 99999) !important;
+		border: var(--abw-wrapper-border-width) solid rgba(0, 0, 0, 0.08);
+		border-radius: 8px;
+		box-shadow: 0 0 0 100vmax #FCFCFC;
+		pointer-events: none;
+	}
+
+	body.abw-sidebar-active .woocommerce-layout__header {
+		margin-top: 8px;
+	}
+
+	body.abw-sidebar-active #image-optimization-top-bar > div {
+		width: 100% !important;
+	}
+	
+	body.abw-sidebar-active .theme-wrap {
+		z-index: var(--abw-sidebar-z-index, 99999) !important;
+		width: calc(100% - var(--abw-sidebar-width, 370px)) !important;
+	}
+	
+	body.abw-sidebar-active .e-global__popover {
+		z-index: 1201 !important;
+	}
+	
+	body.abw-sidebar-active #site-editor {
+		margin-inline-start: var(--abw-sidebar-width, 370px) !important;
+	}
+}
+
+/* WordPress Editor Fullscreen Mode Adjustments */
+body {
+	--admin-menu-width: 160px;
+}
+
+body.folded {
+	--admin-menu-width: 36px;
+}
+
+body.is-fullscreen-mode {
+	--admin-menu-width: 0px;
+}
+
+body.block-editor-page.abw-sidebar-active.block-editor-page .interface-interface-skeleton {
+	inset-inline-start: calc(var(--abw-sidebar-width, 370px) + var(--admin-menu-width)) !important;
+	inset-inline-end: 0 !important;
+	top: calc(32px + 8px) !important;
+	margin-bottom: 8px !important;
+}
+
+.block-editor-page.abw-sidebar-active.block-editor-page.is-fullscreen-mode .interface-interface-skeleton {
+	top: 8px !important;
+}
+
+/* Ensure interface skeleton transitions smoothly */
+body.block-editor-page.abw-sidebar-transitioning .interface-interface-skeleton {
+	transition: var(--abw-sidebar-transition) !important;
+}
+
+body.abw-sidebar-active iframe.elementor-app-iframe {
+	width: calc(100% - var(--abw-sidebar-width, 370px)) !important;
+	margin-inline-start: var(--abw-sidebar-width, 370px);
+}
+
+/* Admin Bar Toggle Item Styling */
+#wp-admin-bar-abw-sidebar-toggle .ab-icon {
+	font-size: 18px;
+	margin-right: 5px;
+	vertical-align: middle;
+}
+
+#wp-admin-bar-abw-sidebar-toggle .ab-label {
+	vertical-align: middle;
+}
+
+/* Mobile responsive behavior */
+@media (max-width: 768px) {
+	#abw-sidebar-container {
+		width: 100%;
+		transform: translateX(-100%);
+	}
+
+	html[dir="rtl"] #abw-sidebar-container {
+		transform: translateX(100%);
+	}
+
+	body.abw-sidebar-active {
+		padding-inline-start: 0 !important;
+		padding-inline-end: 0 !important;
+	}
+
+	body.abw-sidebar-active #wpadminbar {
+		inset-inline-start: 0 !important;
+		inset-inline-end: 0 !important;
+		width: 100% !important;
+	}
+
+	/* Reset fullscreen mode adjustments on mobile */
+	body.abw-sidebar-active .interface-interface-skeleton {
+		inset-inline-start: 0 !important;
+		inset-inline-end: 0 !important;
+	}
+
+	body.abw-sidebar-active #abw-wrapper {
+		display: none;
+	}
+}
+
+/* Not in admin - add small margin top */
+body:not(.wp-admin) #abw-sidebar-container {
+	margin-top: 3px;
+	height: calc(100vh - 3px);
+}
+
+/* Chat widget styles adapted for sidebar */
+#abw-sidebar-container .abw-chat-header {
+	background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+	color: white;
+	padding: 16px 20px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	flex-shrink: 0;
+}
+
+#abw-sidebar-container .abw-chat-header-title {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 600;
+	font-size: 15px;
+}
+
+#abw-sidebar-container .abw-chat-logo {
+	font-size: 20px;
+}
+
+#abw-sidebar-container .abw-chat-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+	background: #f8fafc;
+}
+
+#abw-sidebar-container .abw-chat-input-area {
+	padding: 16px 20px;
+	background: white;
+	border-top: 1px solid #e2e8f0;
+	flex-shrink: 0;
+}
+
+#abw-sidebar-container .abw-chat-footer {
+	padding: 8px 20px;
+	background: #f8fafc;
+	border-top: 1px solid #e2e8f0;
+	text-align: center;
+	flex-shrink: 0;
+}
+
+/* Ensure sidebar content doesn't overflow */
+#abw-sidebar-container .abw-chat-messages {
+	max-height: calc(100vh - 200px);
+}
