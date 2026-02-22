@@ -634,6 +634,13 @@ class ABW_AI_Router
             'analyze_content_sentiment' => ['ABW_AI_Tools', 'analyze_content_sentiment'],
             'detect_content_language' => ['ABW_AI_Tools', 'detect_content_language'],
             'check_content_accessibility' => ['ABW_AI_Tools', 'check_content_accessibility'],
+            // Block Editor Tools (return block_actions for frontend execution)
+            'insert_editor_blocks'    => [__CLASS__, 'execute_insert_editor_blocks'],
+            'replace_editor_content'  => [__CLASS__, 'execute_replace_editor_content'],
+            'update_editor_block'     => [__CLASS__, 'execute_update_editor_block'],
+            'remove_editor_blocks'    => [__CLASS__, 'execute_remove_editor_blocks'],
+            'save_current_post'       => [__CLASS__, 'execute_save_current_post'],
+            'update_post_details'     => [__CLASS__, 'execute_update_post_details'],
         ];
 
         if (! isset($tool_mapping[$tool_name])) {
@@ -647,6 +654,186 @@ class ABW_AI_Router
         }
 
         return new WP_Error('tool_not_callable', sprintf(__('Tool %s is not callable.', 'abw-ai'), $tool_name));
+    }
+
+    // =========================================================================
+    // Block Editor Tool Handlers
+    //
+    // These return structured data with a __block_actions key. The chat
+    // handler detects this key and passes the actions to the frontend JS
+    // which executes them via wp.data.dispatch.
+    // =========================================================================
+
+    /**
+     * Insert blocks into the editor.
+     *
+     * @param array $args { html: string, position?: string }
+     * @return array Block action payload.
+     */
+    public static function execute_insert_editor_blocks(array $args): array
+    {
+        $html     = $args['html'] ?? '';
+        $position = $args['position'] ?? 'end';
+
+        if (empty($html)) {
+            return ['success' => false, 'message' => 'No HTML content provided.'];
+        }
+
+        return [
+            'success'        => true,
+            'message'        => 'Blocks will be inserted.',
+            '__block_actions' => [
+                [
+                    'action'   => 'insert_blocks',
+                    'html'     => $html,
+                    'position' => $position,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Replace all editor content.
+     *
+     * @param array $args { html: string }
+     * @return array Block action payload.
+     */
+    public static function execute_replace_editor_content(array $args): array
+    {
+        $html = $args['html'] ?? '';
+
+        if (empty($html)) {
+            return ['success' => false, 'message' => 'No HTML content provided.'];
+        }
+
+        return [
+            'success'        => true,
+            'message'        => 'Editor content will be replaced.',
+            '__block_actions' => [
+                [
+                    'action' => 'replace_all',
+                    'html'   => $html,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Update a specific editor block.
+     *
+     * @param array $args { block_index: int, attributes: object }
+     * @return array Block action payload.
+     */
+    public static function execute_update_editor_block(array $args): array
+    {
+        $block_index = $args['block_index'] ?? null;
+        $attributes  = $args['attributes'] ?? [];
+
+        if ($block_index === null) {
+            return ['success' => false, 'message' => 'Block index is required.'];
+        }
+
+        return [
+            'success'        => true,
+            'message'        => sprintf('Block [%d] will be updated.', $block_index),
+            '__block_actions' => [
+                [
+                    'action'      => 'update_block',
+                    'block_index' => (int) $block_index,
+                    'attributes'  => $attributes,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Remove blocks from the editor.
+     *
+     * @param array $args { block_indices: array }
+     * @return array Block action payload.
+     */
+    public static function execute_remove_editor_blocks(array $args): array
+    {
+        $indices = $args['block_indices'] ?? [];
+
+        if (empty($indices)) {
+            return ['success' => false, 'message' => 'No block indices provided.'];
+        }
+
+        return [
+            'success'        => true,
+            'message'        => sprintf('Blocks [%s] will be removed.', implode(', ', $indices)),
+            '__block_actions' => [
+                [
+                    'action'        => 'remove_blocks',
+                    'block_indices' => array_map('intval', $indices),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Save the current post.
+     *
+     * @param array $args Unused.
+     * @return array Block action payload.
+     */
+    public static function execute_save_current_post(array $args = []): array
+    {
+        return [
+            'success'        => true,
+            'message'        => 'Post will be saved.',
+            '__block_actions' => [
+                [
+                    'action' => 'save_post',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Update post details (title, status, excerpt).
+     *
+     * @param array $args { title?: string, status?: string, excerpt?: string }
+     * @return array Block action payload.
+     */
+    public static function execute_update_post_details(array $args): array
+    {
+        $action = ['action' => 'update_post_meta'];
+
+        if (isset($args['title'])) {
+            $action['title'] = $args['title'];
+        }
+        if (isset($args['status'])) {
+            $action['status'] = $args['status'];
+        }
+        if (isset($args['excerpt'])) {
+            $action['excerpt'] = $args['excerpt'];
+        }
+
+        return [
+            'success'        => true,
+            'message'        => 'Post details will be updated.',
+            '__block_actions' => [$action],
+        ];
+    }
+
+    /**
+     * Check whether a tool name is a block editor tool.
+     *
+     * @param string $tool_name Tool name.
+     * @return bool
+     */
+    public static function is_block_editor_tool(string $tool_name): bool
+    {
+        return in_array($tool_name, [
+            'insert_editor_blocks',
+            'replace_editor_content',
+            'update_editor_block',
+            'remove_editor_blocks',
+            'save_current_post',
+            'update_post_details',
+        ], true);
     }
 
     /**
@@ -1056,6 +1243,74 @@ class ABW_AI_Router
             ];
         }
 
+        // Block Editor tools (only included when editor context is present)
+        $tools[] = [
+            'name'        => 'insert_editor_blocks',
+            'description' => 'Insert HTML content as blocks into the block editor at a specific position. The HTML will be automatically converted to WordPress blocks. Use standard HTML (h2, p, ul, ol, img, table, blockquote, pre/code, etc.).',
+            'parameters'  => [
+                'type'       => 'object',
+                'required'   => ['html'],
+                'properties' => [
+                    'html'     => ['type' => 'string', 'description' => 'HTML content to insert (h1-h6, p, ul, ol, img, table, blockquote, pre, etc.)'],
+                    'position' => ['type' => 'string', 'description' => 'Where to insert: "start", "end" (default), or "after:N" where N is block index'],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'replace_editor_content',
+            'description' => 'Replace ALL content in the block editor with new HTML. Use this to completely rewrite the post content.',
+            'parameters'  => [
+                'type'       => 'object',
+                'required'   => ['html'],
+                'properties' => [
+                    'html' => ['type' => 'string', 'description' => 'Complete HTML content to replace all editor blocks'],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'update_editor_block',
+            'description' => 'Update the content attribute of a specific block by its index. Reference blocks by their [N] index from the editor context.',
+            'parameters'  => [
+                'type'       => 'object',
+                'required'   => ['block_index', 'attributes'],
+                'properties' => [
+                    'block_index' => ['type' => 'integer', 'description' => 'Block index from the editor context (e.g., 0, 1, 2...)'],
+                    'attributes'  => ['type' => 'object', 'description' => 'Block attributes to update (e.g., {"content": "new text"})'],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'remove_editor_blocks',
+            'description' => 'Remove blocks from the editor by their indices.',
+            'parameters'  => [
+                'type'       => 'object',
+                'required'   => ['block_indices'],
+                'properties' => [
+                    'block_indices' => ['type' => 'array', 'description' => 'Array of block indices to remove', 'items' => ['type' => 'integer']],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'save_current_post',
+            'description' => 'Save the current post in the block editor. Call this after making changes if the user wants to save.',
+            'parameters'  => [
+                'type'       => 'object',
+                'properties' => new \stdClass(),
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'update_post_details',
+            'description' => 'Update post metadata like title, status, or excerpt in the block editor.',
+            'parameters'  => [
+                'type'       => 'object',
+                'properties' => [
+                    'title'   => ['type' => 'string', 'description' => 'New post title'],
+                    'status'  => ['type' => 'string', 'description' => 'Post status: draft, publish, pending, private'],
+                    'excerpt' => ['type' => 'string', 'description' => 'Post excerpt'],
+                ],
+            ],
+        ];
+
         // Add AI tools
         $ai_tools = ABW_AI_Tools::get_tools_list();
         $tools = array_merge($tools, $ai_tools);
@@ -1066,9 +1321,10 @@ class ABW_AI_Router
     /**
      * Get system prompt for AI
      *
+     * @param string $editor_context Optional serialized block editor context.
      * @return string
      */
-    public static function get_system_prompt(): string
+    public static function get_system_prompt(string $editor_context = ''): string
     {
         $site_name = get_bloginfo('name');
         $site_url  = home_url();
@@ -1077,7 +1333,7 @@ class ABW_AI_Router
 
         $has_elementor = class_exists('\Elementor\Plugin') ? 'Yes' : 'No';
 
-        return <<<PROMPT
+        $prompt = <<<PROMPT
 You are ABW-AI, an Advanced Butler for WordPress. You are a helpful AI assistant that helps users manage their WordPress website.
 
 Current WordPress Site:
@@ -1120,6 +1376,41 @@ Guidelines:
 
 Always prioritize the user's intent and provide clear, actionable responses.
 PROMPT;
+
+        // Append block editor instructions when editor context is provided.
+        if (! empty($editor_context)) {
+            $prompt .= <<<EDITOR
+
+
+--- BLOCK EDITOR MODE ---
+
+You are currently helping the user edit a post in the WordPress Block Editor (Gutenberg).
+You can see the full block structure below and can directly manipulate blocks in the editor.
+
+BLOCK EDITOR TOOLS:
+- insert_editor_blocks: Insert new content (HTML) at a position (start, end, or after block index N). The HTML is automatically converted to WordPress blocks (headings, paragraphs, lists, images, tables, quotes, code blocks, etc.).
+- replace_editor_content: Replace ALL editor content with new HTML. Use this to completely rewrite the post.
+- update_editor_block: Update a specific block's attributes by its index [N].
+- remove_editor_blocks: Remove blocks by their indices.
+- save_current_post: Save the post after making changes.
+- update_post_details: Update post title, status (draft/publish/pending/private), or excerpt.
+
+CURRENT EDITOR STATE:
+{$editor_context}
+
+IMPORTANT RULES FOR BLOCK EDITOR:
+- Reference blocks by their index [N] shown in the editor state above.
+- When generating content, output standard HTML (h1-h6, p, ul, ol, li, img, table, blockquote, pre, code, figure, etc.). The frontend automatically converts HTML into proper WordPress blocks.
+- For headings, use <h2>, <h3>, etc. For lists, use <ul>/<ol> with <li>. For images, use <img> with src and alt.
+- Always explain what changes you are making before executing the tools.
+- Use insert_editor_blocks to ADD content. Use replace_editor_content to REWRITE everything.
+- If the user asks to save, call save_current_post after making changes.
+- You can chain multiple tools in one response (e.g., update_post_details to set title + insert_editor_blocks to add content + save_current_post to save).
+- Do NOT use the create_post or update_post tools when in the block editor. Use the editor-specific tools instead since they update the editor directly and the user can see changes live.
+EDITOR;
+        }
+
+        return $prompt;
     }
 
     /**

@@ -52,6 +52,9 @@ class ABW_Chat_Interface {
 		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
 		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
 
+		// Block editor sidebar (PluginSidebar via React)
+		add_action( 'enqueue_block_editor_assets', [ __CLASS__, 'enqueue_block_editor_assets' ] );
+
 		// AJAX handlers
 		add_action( 'wp_ajax_abw_chat_message', [ __CLASS__, 'handle_chat_message' ] );
 		add_action( 'wp_ajax_abw_chat_history', [ __CLASS__, 'get_chat_history' ] );
@@ -101,6 +104,11 @@ class ABW_Chat_Interface {
 			return;
 		}
 
+		// Skip on block editor pages.
+		if ( self::is_block_editor_screen() ) {
+			return;
+		}
+
 		wp_enqueue_style(
 			'abw-sidebar',
 			ABW_URL . 'assets/sidebar.css',
@@ -120,6 +128,11 @@ class ABW_Chat_Interface {
 
 		// Check if chat is enabled
 		if ( ! get_option( 'abw_chat_enabled', true ) ) {
+			return;
+		}
+
+		// Skip on block editor pages - the native PluginSidebar handles its own styles.
+		if ( self::is_block_editor_screen() ) {
 			return;
 		}
 
@@ -169,6 +182,53 @@ class ABW_Chat_Interface {
 	}
 
 	/**
+	 * Enqueue block editor sidebar assets (React PluginSidebar).
+	 *
+	 * Fires on `enqueue_block_editor_assets` so the script only loads
+	 * inside the Gutenberg editor.
+	 */
+	public static function enqueue_block_editor_assets(): void {
+		if ( ! current_user_can( 'use_abw' ) || ! get_option( 'abw_chat_enabled', true ) ) {
+			return;
+		}
+
+		$asset_file = ABW_PATH . 'build/editor-sidebar.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return; // Build not yet run.
+		}
+
+		$asset = require $asset_file;
+
+		wp_enqueue_script(
+			'abw-editor-sidebar',
+			ABW_URL . 'build/editor-sidebar.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_enqueue_style(
+			'abw-editor-sidebar',
+			ABW_URL . 'build/editor-sidebar.css',
+			[],
+			$asset['version']
+		);
+
+		// Provide chat config to the editor sidebar script.
+		global $post;
+		wp_localize_script( 'abw-editor-sidebar', 'abwEditorChat', [
+			'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
+			'nonce'    => wp_create_nonce( 'abw-chat' ),
+			'userId'   => get_current_user_id(),
+			'userName' => wp_get_current_user()->display_name,
+			'siteName' => get_bloginfo( 'name' ),
+			'provider' => ucfirst( ABW_AI_Router::get_provider() ),
+			'postId'   => $post ? $post->ID : 0,
+			'postType' => $post ? $post->post_type : 'post',
+		] );
+	}
+
+	/**
 	 * Get current page context for AI
 	 *
 	 * @return array
@@ -199,10 +259,60 @@ class ABW_Chat_Interface {
 	}
 
 	/**
+	 * Check if the current screen is the block editor.
+	 *
+	 * When the block editor is active, we use the native PluginSidebar
+	 * instead of the CSS-injected sidebar.
+	 *
+	 * @return bool
+	 */
+	private static function is_block_editor_screen(): bool {
+		global $pagenow;
+
+		// Only applies in admin context.
+		if ( ! is_admin() ) {
+			return false;
+		}
+
+		// Block editor loads on post.php and post-new.php.
+		if ( ! in_array( $pagenow, [ 'post.php', 'post-new.php' ], true ) ) {
+			return false;
+		}
+
+		// Check if the block editor JS was actually built (build dir exists).
+		if ( ! file_exists( ABW_PATH . 'build/editor-sidebar.asset.php' ) ) {
+			return false; // Fallback to regular sidebar if build is missing.
+		}
+
+		// Check if the block editor is enabled for this post type.
+		if ( function_exists( 'use_block_editor_for_post_type' ) ) {
+			$post_type = '';
+			if ( function_exists( 'get_current_screen' ) ) {
+				$screen = get_current_screen();
+				if ( $screen && ! empty( $screen->post_type ) ) {
+					$post_type = $screen->post_type;
+				}
+			}
+			if ( empty( $post_type ) ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$post_type = isset( $_GET['post_type'] ) ? sanitize_key( $_GET['post_type'] ) : 'post';
+			}
+			return use_block_editor_for_post_type( $post_type );
+		}
+
+		return true;
+	}
+
+	/**
 	 * Inject sidebar HTML container (Angie-style)
 	 */
 	public static function inject_sidebar_html(): void {
 		if ( ! current_user_can( 'use_abw' ) || ! get_option( 'abw_chat_enabled', true ) ) {
+			return;
+		}
+
+		// Skip on block editor pages - the native PluginSidebar is used there.
+		if ( self::is_block_editor_screen() ) {
 			return;
 		}
 
@@ -371,22 +481,29 @@ class ABW_Chat_Interface {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
 		}
 
-		$message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
-		$context = isset( $_POST['context'] ) ? json_decode( stripslashes( $_POST['context'] ), true ) : [];
+		$message        = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+		$context        = isset( $_POST['context'] ) ? json_decode( stripslashes( $_POST['context'] ), true ) : [];
+		$editor_context = isset( $_POST['editor_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['editor_context'] ) ) : '';
 
 		if ( empty( $message ) ) {
 			wp_send_json_error( [ 'message' => __( 'Message cannot be empty.', 'abw-ai' ) ] );
 		}
 
+		$is_block_editor = ! empty( $editor_context );
+
 		// Get conversation history
 		$user_id = get_current_user_id();
 		$history = self::get_user_history( $user_id );
 
-		// Build messages array
+		// Build messages array - use editor-aware system prompt when in block editor.
+		$system_prompt = $is_block_editor
+			? ABW_AI_Router::get_system_prompt( $editor_context )
+			: ABW_AI_Router::get_system_prompt();
+
 		$messages = [
 			[
 				'role'    => 'system',
-				'content' => ABW_AI_Router::get_system_prompt(),
+				'content' => $system_prompt,
 			],
 		];
 
@@ -422,7 +539,8 @@ class ABW_Chat_Interface {
 
 		// Handle tool calls if any
 		$final_response = $response['content'];
-		$tool_results = [];
+		$tool_results   = [];
+		$block_actions  = []; // Collect block actions from editor tools.
 
 		if ( ! empty( $response['tool_calls'] ) ) {
 			// Check if any tool call is a long-running background operation.
@@ -455,6 +573,14 @@ class ABW_Chat_Interface {
 			// Synchronous processing for non-background tools or if queuing failed.
 			foreach ( $response['tool_calls'] as $tool_call ) {
 				$result = ABW_AI_Router::execute_tool( $tool_call['name'], $tool_call['arguments'] );
+
+				// Collect block actions from editor tools.
+				if ( ! is_wp_error( $result ) && is_array( $result ) && ! empty( $result['__block_actions'] ) ) {
+					$block_actions = array_merge( $block_actions, $result['__block_actions'] );
+					// Remove internal key before passing to AI as tool result.
+					unset( $result['__block_actions'] );
+				}
+
 				$tool_results[] = [
 					'tool'   => $tool_call['name'],
 					'result' => is_wp_error( $result ) ? $result->get_error_message() : $result,
@@ -491,10 +617,17 @@ class ABW_Chat_Interface {
 			ABW_AI_Router::track_usage( ABW_AI_Router::get_provider(), $response['usage'] );
 		}
 
-		wp_send_json_success( [
+		$response_data = [
 			'response'     => $final_response,
 			'tool_results' => $tool_results,
-		] );
+		];
+
+		// Include block actions for the frontend to execute.
+		if ( ! empty( $block_actions ) ) {
+			$response_data['block_actions'] = $block_actions;
+		}
+
+		wp_send_json_success( $response_data );
 	}
 
 	/**
