@@ -4,11 +4,11 @@
 
 An AI-powered assistant for WordPress that lives inside your admin dashboard. It can manage posts, users, media, plugins, menus, WooCommerce orders, Elementor layouts, and more -- all through natural language conversation. It also integrates natively with the WordPress Block Editor (Gutenberg) so you can ask it to write, edit, and structure content directly inside the editor.
 
-ABW-AI is enhanced for **MiniMax** models, taking advantage of their 200K+ token context windows, fast inference speeds, and cost-effective pricing -- making it practical to send full page layouts and long editor contexts to the AI without worrying about token limits or response latency.
+ABW-AI is enhanced for **MiniMax** models, taking advantage of their 1M token context window, fast inference speeds, and cost-effective pricing -- making it practical to send full page layouts and long editor contexts to the AI without worrying about token limits or response latency.
 
 ---
 
-> **Sponsored by [MiniMax](https://www.minimax.io)** -- high-performance AI models with ultra-long context, agentic tool calling, and OpenAI-compatible APIs. Get your API key at [platform.minimax.io](https://platform.minimax.io).
+> **Sponsored by [MiniMax](https://www.minimax.io)** -- high-performance AI models with 1M token context, agentic tool calling, and OpenAI-compatible APIs. Get your API key at [platform.minimax.io](https://platform.minimax.io).
 
 ---
 
@@ -25,22 +25,31 @@ Optional:
 
 ## Supported AI Providers
 
-| Provider | Models | Context Window | Notes |
-|----------|--------|---------------|-------|
-| **MiniMax** (recommended) | MiniMax-M2.5, M2.5-highspeed, M2.1, M2 | 204,800 tokens | Ultra-long context ideal for block editor. OpenAI-compatible API. Fast and cost-effective. |
-| OpenAI | GPT-4 Turbo, GPT-4o, etc. | 128K tokens | Widely used, strong tool calling support. |
-| Anthropic | Claude 3.5 Sonnet, Claude 3 Opus, etc. | 200K tokens | Excellent reasoning, native tool use. |
-| Custom | Any OpenAI-compatible endpoint | Varies | Bring your own model -- works with any provider that implements the OpenAI chat completions API. |
+| Provider | Latest Model | Context Window | Output Limit | Pricing (per 1M tokens) |
+|----------|-------------|---------------|-------------|------------------------|
+| **MiniMax** (recommended) | MiniMax-M2.5 | **1,000,000 tokens** | 128K tokens | $0.30 input / $1.20 output |
+| OpenAI | GPT-5.2 | 256K tokens | 128K tokens | Varies by variant |
+| Anthropic | Claude Opus 4.6 | 1,000,000 tokens (beta) | 32K tokens | $5.00 input / $25.00 output |
+| Custom | Any OpenAI-compatible endpoint | Varies | Varies | -- |
 
 ### Why MiniMax?
 
 ABW-AI sends the full block editor state (every block, its type, attributes, and content) as context with each message. This can easily reach tens of thousands of tokens for content-rich pages. MiniMax models are a strong fit because:
 
-- **204,800 token context** -- fits even the largest pages without truncation
+- **1M token context window** -- fits even the largest pages without truncation, with room to spare for conversation history
+- **128K token output** -- can generate entire articles or full page layouts in a single response
 - **100 tokens/second** on highspeed models -- fast responses even with large context
-- **~8% of the cost** of comparable frontier models -- practical for frequent use
+- **$0.30 / 1M input tokens** -- roughly 8% of the cost of comparable frontier models, practical for frequent use
 - **OpenAI-compatible API** -- works out of the box with ABW-AI's custom provider, no code changes needed
 - **Agentic tool calling** -- reliable function calling for all 50+ WordPress management tools
+- **Vision support** -- M2.5 supports image input, enabling future multimodal workflows
+
+### Model Variants
+
+| Model | Speed | Best For |
+|-------|-------|----------|
+| `MiniMax-M2.5` | ~60 tokens/sec | Complex tasks, coding, long-form content |
+| `MiniMax-M2.5-highspeed` | ~100 tokens/sec | Quick edits, conversational use, real-time interactions |
 
 ## Installation
 
@@ -122,7 +131,7 @@ Blocks:
     [4.1.0] core/paragraph: "Right column"
 ```
 
-This means even AI models without vision can understand and manipulate your page layout. MiniMax's 200K+ token context window ensures this representation is never truncated, even for the most complex pages.
+This means even AI models without vision can understand and manipulate your page layout. MiniMax's 1M token context window ensures this representation is never truncated, even for the most complex pages.
 
 ### WordPress Management Tools (50+)
 
@@ -172,10 +181,6 @@ Long-running AI operations (content generation, page design, etc.) are automatic
 
 Monitor jobs from **ABW-AI > Background Jobs** in the admin menu.
 
-### MCP Integration
-
-ABW-AI registers abilities with the WordPress Abilities API, making them discoverable by any MCP client (Cursor, Claude Desktop, etc.) through the WordPress MCP Adapter.
-
 ## Architecture
 
 ```
@@ -185,7 +190,7 @@ abw-ai/
 │   ├── class-admin.php                  # Admin pages and settings
 │   ├── class-ai-router.php             # Multi-provider AI routing and tool execution
 │   ├── class-ai-tools.php              # AI-powered writing/SEO tools
-│   ├── class-abilities-registration.php # WordPress Abilities API registration
+│   ├── class-abilities-registration.php # WordPress tool registration
 │   ├── class-background-jobs.php        # Background job queue and processing
 │   ├── class-chat-interface.php         # Chat sidebar, AJAX handlers, block editor enqueue
 │   └── class-elementor-rest-api.php     # Elementor REST API extensions
@@ -224,8 +229,8 @@ abw-ai/
 Go to **ABW-AI > Settings** and select your provider:
 
 - **MiniMax** (recommended) -- select "Custom Provider" and use endpoint `https://api.minimax.io/v1/chat/completions` with model `MiniMax-M2.5`
-- **OpenAI** -- uses `gpt-5` by default
-- **Anthropic** -- uses `claude-4-5-sonnet` by default
+- **OpenAI** -- uses `gpt-5.2` by default
+- **Anthropic** -- uses `claude-opus-4.6` by default
 - **Custom** -- point to any OpenAI-compatible API endpoint
 
 ### MiniMax Configuration
@@ -234,27 +239,8 @@ Go to **ABW-AI > Settings** and select your provider:
 |---------|-------|
 | Provider | Custom Provider |
 | API Key | Your key from [platform.minimax.io](https://platform.minimax.io) |
-| API Endpoint | `https://api.minimax.io/v1/` |
+| API Endpoint | `https://api.minimax.io/v1/chat/completions` |
 | Model Name | `MiniMax-M2.5` or `MiniMax-M2.5-highspeed` |
-
-### MCP Client Configuration
-
-For Cursor, Claude Desktop, or other MCP clients:
-
-```json
-{
-  "mcpServers": {
-    "abw-ai": {
-      "command": "node",
-      "args": ["/path/to/wp-mcp-server-abw/dist/server.js"],
-      "env": {
-        "WORDPRESS_URL": "https://your-site.com",
-        "ABW_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
-```
 
 ## Development
 
@@ -298,7 +284,7 @@ This design means the AI generates standard HTML, and `wp.blocks.rawHandler()` c
   <strong>MiniMax</strong>
 </a>
 
-ABW-AI is proudly sponsored by **MiniMax**. Their high-performance AI models with ultra-long context windows, fast inference, and OpenAI-compatible APIs make them an ideal backbone for AI-powered WordPress management.
+ABW-AI is proudly sponsored by **MiniMax**. Their high-performance AI models with 1M token context windows, fast inference, and OpenAI-compatible APIs make them an ideal backbone for AI-powered WordPress management.
 
 - Website: [minimax.io](https://www.minimax.io)
 - API Platform: [platform.minimax.io](https://platform.minimax.io)
