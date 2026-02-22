@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: ABW-AI - Advanced Butler WordPress AI
- * Plugin URI: https://github.com/madebyaris/abw-ai
+ * Plugin URI: https://github.com/madebyaris/ai-butler-wordpress
  * Description: Advanced AI assistant for WordPress with MCP support, Elementor integration, and multi-provider AI chat interface
  * Version: 1.0.0
  * Author: ABW-AI Contributors
- * Author URI: https://github.com/madebyaris/abw-ai
+ * Author URI: https://github.com/madebyaris/ai-butler-wordpress
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
  * Text Domain: abw-ai
