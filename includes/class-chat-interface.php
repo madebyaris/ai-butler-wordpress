@@ -546,6 +546,36 @@ class ABW_Chat_Interface {
 		$iteration         = $result['iteration'];
 		$has_more_tools    = ! empty( $response['tool_calls'] );
 		$at_iteration_limit = $iteration >= self::AGENTIC_MAX_ITERATIONS;
+		$queued_background = ! empty( $background_jobs );
+
+		// Background jobs are already dispatched asynchronously, so return immediately.
+		// This avoids false "timeout/error" states in UI polling while the job is processing.
+		if ( $queued_background ) {
+			$final_response = __( 'Task queued for background processing.', 'abw-ai' );
+			self::save_to_history( $user_id, 'user', $message );
+			self::save_to_history( $user_id, 'assistant', $final_response );
+			if ( isset( $response['usage'] ) ) {
+				ABW_AI_Router::track_usage( $provider, $response['usage'] );
+			}
+
+			ABW_Debug_Log::log(
+				'chat_background_queued',
+				[
+					'job_type'    => $background_jobs[0]['job_type'] ?? '',
+					'iteration'   => $iteration,
+					'steps_count' => count( $steps ),
+				],
+				'Background task queued and returned immediately'
+			);
+
+			wp_send_json_success( [
+				'status'         => 'done',
+				'response'       => $final_response,
+				'steps'          => $steps,
+				'background_job' => $background_jobs[0],
+				'tool_results'   => $result['all_tool_results'] ?? [],
+			] );
+		}
 
 		if ( ! $has_more_tools || $at_iteration_limit ) {
 			// Done in one or more rounds - return final response.
@@ -671,6 +701,36 @@ class ABW_Chat_Interface {
 		$session['block_actions']      = array_merge( $session['block_actions'] ?? [], $result['block_actions'] );
 		$session['background_jobs']   = array_merge( $session['background_jobs'] ?? [], $result['background_jobs'] );
 		$session['all_tool_results']   = array_merge( $session['all_tool_results'] ?? [], $result['all_tool_results'] ?? [] );
+		$queued_background             = ! empty( $result['background_jobs'] );
+
+		if ( $queued_background ) {
+			$session['status']         = 'done';
+			$session['final_response'] = __( 'Task queued for background processing.', 'abw-ai' );
+			self::save_to_history( $user_id, 'assistant', $session['final_response'] );
+			if ( isset( $result['response']['usage'] ) ) {
+				ABW_AI_Router::track_usage( $provider, $result['response']['usage'] );
+			}
+			delete_transient( 'abw_agent_' . $session_id );
+			ABW_Debug_Log::log(
+				'agent_background_queued',
+				[
+					'session_id'  => $session_id,
+					'job_type'    => $session['background_jobs'][0]['job_type'] ?? '',
+					'iteration'   => $session['iteration'],
+					'steps_count' => count( $session['steps'] ?? [] ),
+				],
+				'Background task queued during poll and session completed'
+			);
+			wp_send_json_success( [
+				'status'         => 'done',
+				'response'       => $session['final_response'],
+				'steps'          => $session['steps'] ?? [],
+				'block_actions'  => $session['block_actions'] ?? [],
+				'background_job' => $session['background_jobs'][0],
+				'tool_results'   => $session['all_tool_results'] ?? [],
+			] );
+			return;
+		}
 
 		$response          = $result['response'];
 		$has_more_tools     = ! empty( $response['tool_calls'] );
