@@ -326,6 +326,24 @@ class ABW_Abilities_Registration
             'permission_callback' => [__CLASS__, 'check_admin_permission'],
         ]);
 
+        wp_register_ability('abw-ai/update-plugin', [
+            'label'       => __('Update Plugin', 'abw-ai'),
+            'description' => __('Update a WordPress plugin to the latest available version', 'abw-ai'),
+            'category'    => 'abw-ai',
+            'input_schema' => [
+                'type'       => 'object',
+                'required'   => ['plugin'],
+                'properties' => [
+                    'plugin' => [
+                        'type'        => 'string',
+                        'description' => 'Plugin file path (e.g., "plugin-folder/plugin-file.php")',
+                    ],
+                ],
+            ],
+            'execute_callback'   => [__CLASS__, 'execute_update_plugin'],
+            'permission_callback' => [__CLASS__, 'check_admin_permission'],
+        ]);
+
         // =====================
         // Theme Abilities
         // =====================
@@ -356,6 +374,24 @@ class ABW_Abilities_Registration
                 ],
             ],
             'execute_callback'   => [__CLASS__, 'execute_activate_theme'],
+            'permission_callback' => [__CLASS__, 'check_admin_permission'],
+        ]);
+
+        wp_register_ability('abw-ai/update-theme', [
+            'label'       => __('Update Theme', 'abw-ai'),
+            'description' => __('Update a WordPress theme to the latest available version', 'abw-ai'),
+            'category'    => 'abw-ai',
+            'input_schema' => [
+                'type'       => 'object',
+                'required'   => ['stylesheet'],
+                'properties' => [
+                    'stylesheet' => [
+                        'type'        => 'string',
+                        'description' => 'Theme stylesheet (directory name)',
+                    ],
+                ],
+            ],
+            'execute_callback'   => [__CLASS__, 'execute_update_theme'],
             'permission_callback' => [__CLASS__, 'check_admin_permission'],
         ]);
 
@@ -1837,6 +1873,84 @@ class ABW_Abilities_Registration
     }
 
     /**
+     * Execute update plugin ability
+     */
+    public static function execute_update_plugin($input)
+    {
+        if (empty($input['plugin'])) {
+            return new WP_Error('missing_plugin', __('Plugin file path is required.', 'abw-ai'));
+        }
+
+        if (! current_user_can('update_plugins')) {
+            return new WP_Error('forbidden', __('You do not have permission to update plugins.', 'abw-ai'));
+        }
+
+        if (! function_exists('get_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        if (! function_exists('get_plugin_updates')) {
+            require_once ABSPATH . 'wp-admin/includes/update.php';
+        }
+        if (! class_exists('Plugin_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        $plugin_file = sanitize_text_field($input['plugin']);
+        $all_plugins = get_plugins();
+
+        if (! isset($all_plugins[$plugin_file])) {
+            return new WP_Error('not_found', __('Plugin not found.', 'abw-ai'));
+        }
+
+        wp_update_plugins();
+        $updates = get_plugin_updates();
+
+        if (! isset($updates[$plugin_file])) {
+            return [
+                'plugin'       => $plugin_file,
+                'name'         => $all_plugins[$plugin_file]['Name'] ?? $plugin_file,
+                'success'      => true,
+                'updated'      => false,
+                'from_version' => $all_plugins[$plugin_file]['Version'] ?? '',
+                'to_version'   => $all_plugins[$plugin_file]['Version'] ?? '',
+                'message'      => __('Plugin is already up to date.', 'abw-ai'),
+            ];
+        }
+
+        $plugin_update = $updates[$plugin_file];
+        $from_version  = $plugin_update->Version ?? ($all_plugins[$plugin_file]['Version'] ?? '');
+        $to_version    = $plugin_update->update->new_version ?? '';
+
+        $skin     = new Automatic_Upgrader_Skin();
+        $upgrader = new Plugin_Upgrader($skin);
+        $result   = $upgrader->upgrade($plugin_file);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        if (false === $result) {
+            $skin_errors = method_exists($skin, 'get_errors') ? $skin->get_errors() : null;
+            if (is_wp_error($skin_errors) && $skin_errors->has_errors()) {
+                return new WP_Error('plugin_update_failed', $skin_errors->get_error_message());
+            }
+            return new WP_Error('plugin_update_failed', __('Plugin update failed.', 'abw-ai'));
+        }
+
+        wp_clean_plugins_cache(true);
+
+        return [
+            'plugin'       => $plugin_file,
+            'name'         => $plugin_update->Name ?? ($all_plugins[$plugin_file]['Name'] ?? $plugin_file),
+            'success'      => true,
+            'updated'      => true,
+            'from_version' => $from_version,
+            'to_version'   => $to_version,
+            'message'      => __('Plugin updated successfully.', 'abw-ai'),
+        ];
+    }
+
+    /**
      * Execute list themes ability
      */
     public static function execute_list_themes($input)
@@ -1873,6 +1987,81 @@ class ABW_Abilities_Registration
         return [
             'theme'   => $input['stylesheet'],
             'success' => true,
+        ];
+    }
+
+    /**
+     * Execute update theme ability
+     */
+    public static function execute_update_theme($input)
+    {
+        if (empty($input['stylesheet'])) {
+            return new WP_Error('missing_stylesheet', __('Theme stylesheet is required.', 'abw-ai'));
+        }
+
+        if (! current_user_can('update_themes')) {
+            return new WP_Error('forbidden', __('You do not have permission to update themes.', 'abw-ai'));
+        }
+
+        if (! function_exists('get_theme_updates')) {
+            require_once ABSPATH . 'wp-admin/includes/update.php';
+        }
+        if (! class_exists('Theme_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        $stylesheet = sanitize_text_field($input['stylesheet']);
+        $theme      = wp_get_theme($stylesheet);
+
+        if (! $theme->exists()) {
+            return new WP_Error('not_found', __('Theme not found.', 'abw-ai'));
+        }
+
+        wp_update_themes();
+        $updates = get_theme_updates();
+
+        if (! isset($updates[$stylesheet])) {
+            return [
+                'stylesheet'   => $stylesheet,
+                'name'         => $theme->get('Name'),
+                'success'      => true,
+                'updated'      => false,
+                'from_version' => $theme->get('Version'),
+                'to_version'   => $theme->get('Version'),
+                'message'      => __('Theme is already up to date.', 'abw-ai'),
+            ];
+        }
+
+        $theme_update = $updates[$stylesheet];
+        $from_version = $theme_update->get('Version') ?: $theme->get('Version');
+        $to_version   = $theme_update->update['new_version'] ?? '';
+
+        $skin     = new Automatic_Upgrader_Skin();
+        $upgrader = new Theme_Upgrader($skin);
+        $result   = $upgrader->upgrade($stylesheet);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        if (false === $result) {
+            $skin_errors = method_exists($skin, 'get_errors') ? $skin->get_errors() : null;
+            if (is_wp_error($skin_errors) && $skin_errors->has_errors()) {
+                return new WP_Error('theme_update_failed', $skin_errors->get_error_message());
+            }
+            return new WP_Error('theme_update_failed', __('Theme update failed.', 'abw-ai'));
+        }
+
+        wp_clean_themes_cache(true);
+
+        return [
+            'stylesheet'   => $stylesheet,
+            'name'         => $theme_update->get('Name') ?: $theme->get('Name'),
+            'success'      => true,
+            'updated'      => true,
+            'from_version' => $from_version,
+            'to_version'   => $to_version,
+            'message'      => __('Theme updated successfully.', 'abw-ai'),
         ];
     }
 
@@ -3270,6 +3459,817 @@ class ABW_Abilities_Registration
             'id'      => $input['id'],
             'status'  => $input['status'],
             'success' => true,
+        ];
+    }
+
+    /**
+     * Execute get database stats ability.
+     *
+     * Returns table sizes, row counts, and total database size.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error Database statistics or error.
+     */
+    public static function execute_get_database_stats(array $input)
+    {
+        global $wpdb;
+
+        $tables = $wpdb->get_results("SHOW TABLE STATUS FROM `" . DB_NAME . "`", ARRAY_A);
+
+        if ($tables === null || $tables === false) {
+            return new WP_Error('db_error', __('Failed to retrieve database table status.', 'abw-ai'));
+        }
+
+        $total_size  = 0;
+        $table_data  = [];
+
+        foreach ($tables as $table) {
+            $size       = ($table['Data_length'] + $table['Index_length']);
+            $total_size += $size;
+
+            $table_data[] = [
+                'name'       => $table['Name'],
+                'rows'       => (int) $table['Rows'],
+                'size'       => size_format($size, 2),
+                'size_bytes' => $size,
+                'engine'     => $table['Engine'],
+            ];
+        }
+
+        usort($table_data, fn($a, $b) => $b['size_bytes'] - $a['size_bytes']);
+
+        return [
+            'total_size'   => size_format($total_size, 2),
+            'total_tables' => count($tables),
+            'tables'       => array_slice($table_data, 0, 30),
+        ];
+    }
+
+    /**
+     * Execute cleanup database ability.
+     *
+     * Removes revisions, auto-drafts, trashed posts/comments, spam comments,
+     * expired transients, and orphaned postmeta.
+     *
+     * @param array $input {
+     *     Optional input parameters.
+     *
+     *     @type array $types Cleanup types to run. Defaults to all.
+     * }
+     * @return array|WP_Error Counts of deleted items per type or error.
+     */
+    public static function execute_cleanup_database(array $input)
+    {
+        global $wpdb;
+
+        $all_types = [
+            'revisions',
+            'auto_drafts',
+            'trashed_posts',
+            'spam_comments',
+            'trashed_comments',
+            'expired_transients',
+        ];
+
+        $types   = $input['types'] ?? $all_types;
+        $types   = array_intersect($types, $all_types);
+        $deleted = [];
+
+        foreach ($types as $type) {
+            switch ($type) {
+                case 'revisions':
+                    $deleted['revisions'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->posts} WHERE post_type = 'revision'"
+                    );
+                    break;
+
+                case 'auto_drafts':
+                    $deleted['auto_drafts'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->posts} WHERE post_status = 'auto-draft'"
+                    );
+                    break;
+
+                case 'trashed_posts':
+                    $deleted['trashed_posts'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->posts} WHERE post_status = 'trash'"
+                    );
+                    break;
+
+                case 'spam_comments':
+                    $deleted['spam_comments'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->comments} WHERE comment_approved = 'spam'"
+                    );
+                    break;
+
+                case 'trashed_comments':
+                    $deleted['trashed_comments'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->comments} WHERE comment_approved = 'trash'"
+                    );
+                    break;
+
+                case 'expired_transients':
+                    $deleted['expired_transients'] = (int) $wpdb->query(
+                        "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_%' AND option_value < UNIX_TIMESTAMP()"
+                    );
+                    break;
+            }
+        }
+
+        $deleted['orphaned_postmeta'] = (int) $wpdb->query(
+            "DELETE pm FROM {$wpdb->postmeta} pm LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID WHERE p.ID IS NULL"
+        );
+
+        return [
+            'success' => true,
+            'deleted' => $deleted,
+        ];
+    }
+
+    /**
+     * Execute optimize database tables ability.
+     *
+     * Runs OPTIMIZE TABLE on all WordPress-prefixed tables.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error List of optimized tables and their status or error.
+     */
+    public static function execute_optimize_database_tables(array $input)
+    {
+        global $wpdb;
+
+        $tables = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME LIKE %s",
+                DB_NAME,
+                $wpdb->esc_like($wpdb->prefix) . '%'
+            )
+        );
+
+        if (empty($tables)) {
+            return new WP_Error('no_tables', __('No WordPress tables found to optimize.', 'abw-ai'));
+        }
+
+        $results = [];
+
+        foreach ($tables as $table) {
+            $safe_table = esc_sql($table);
+            $status     = $wpdb->get_results("OPTIMIZE TABLE `{$safe_table}`", ARRAY_A);
+
+            $results[] = [
+                'table'   => $table,
+                'status'  => $status[0]['Msg_text'] ?? 'unknown',
+            ];
+        }
+
+        return [
+            'success'         => true,
+            'tables_optimized' => count($results),
+            'results'         => $results,
+        ];
+    }
+
+    /**
+     * Execute list cron jobs ability.
+     *
+     * Returns all scheduled WordPress cron events with their hooks,
+     * next run time, schedule, and arguments.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error List of cron events or error.
+     */
+    public static function execute_list_cron_jobs(array $input)
+    {
+        $crons = _get_cron_array();
+
+        if (empty($crons)) {
+            return ['cron_jobs' => [], 'total' => 0];
+        }
+
+        $events = [];
+
+        foreach ($crons as $timestamp => $hooks) {
+            foreach ($hooks as $hook => $schedules) {
+                foreach ($schedules as $key => $event) {
+                    $events[] = [
+                        'hook'      => $hook,
+                        'next_run'  => wp_date('Y-m-d H:i:s', $timestamp),
+                        'timestamp' => (int) $timestamp,
+                        'schedule'  => $event['schedule'] ?: 'single',
+                        'interval'  => $event['interval'] ?? null,
+                        'args'      => $event['args'],
+                    ];
+                }
+            }
+        }
+
+        usort($events, fn($a, $b) => $a['timestamp'] - $b['timestamp']);
+
+        return [
+            'cron_jobs' => $events,
+            'total'     => count($events),
+        ];
+    }
+
+    /**
+     * Execute delete cron job ability.
+     *
+     * Removes a scheduled cron event by hook name and optional timestamp.
+     *
+     * @param array $input {
+     *     Input parameters.
+     *
+     *     @type string $hook      Required. The cron hook name.
+     *     @type int    $timestamp Optional. Specific event timestamp to remove.
+     * }
+     * @return array|WP_Error Success status or error.
+     */
+    public static function execute_delete_cron_job(array $input)
+    {
+        if (empty($input['hook'])) {
+            return new WP_Error('missing_hook', __('The hook parameter is required.', 'abw-ai'));
+        }
+
+        $hook = sanitize_text_field($input['hook']);
+
+        if (! empty($input['timestamp'])) {
+            $timestamp = (int) $input['timestamp'];
+            $result    = wp_unschedule_event($timestamp, $hook);
+
+            if ($result === false) {
+                return new WP_Error('unschedule_failed', __('Failed to unschedule the cron event.', 'abw-ai'));
+            }
+
+            return [
+                'success'   => true,
+                'hook'      => $hook,
+                'timestamp' => $timestamp,
+                'message'   => __('Single cron event unscheduled.', 'abw-ai'),
+            ];
+        }
+
+        $count = wp_clear_scheduled_hook($hook);
+
+        if ($count === false) {
+            return new WP_Error('clear_failed', __('Failed to clear scheduled hook.', 'abw-ai'));
+        }
+
+        return [
+            'success'       => true,
+            'hook'          => $hook,
+            'events_removed' => $count,
+            'message'       => sprintf(__('Cleared %d scheduled event(s) for hook "%s".', 'abw-ai'), $count, $hook),
+        ];
+    }
+
+    /**
+     * Execute list transients ability.
+     *
+     * Returns counts of total, expired, and active transients.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error Transient counts or error.
+     */
+    public static function execute_list_transients(array $input)
+    {
+        global $wpdb;
+
+        $total = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
+        );
+
+        $expired = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->options} o1 "
+            . "JOIN {$wpdb->options} o2 ON o2.option_name = CONCAT('_transient_timeout_', SUBSTRING(o1.option_name, 12)) "
+            . "WHERE o1.option_name LIKE '_transient_%' "
+            . "AND o1.option_name NOT LIKE '_transient_timeout_%' "
+            . "AND o2.option_value < UNIX_TIMESTAMP()"
+        );
+
+        return [
+            'total'   => $total,
+            'expired' => $expired,
+            'active'  => $total - $expired,
+        ];
+    }
+
+    /**
+     * Execute flush transients ability.
+     *
+     * Deletes all expired transients and their timeout counterparts.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error Count of deleted transients or error.
+     */
+    public static function execute_flush_transients(array $input)
+    {
+        global $wpdb;
+
+        $expired_timeouts = $wpdb->get_col(
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_%' AND option_value < UNIX_TIMESTAMP()"
+        );
+
+        $deleted = 0;
+
+        foreach ($expired_timeouts as $timeout_name) {
+            $transient_name = str_replace('_transient_timeout_', '_transient_', $timeout_name);
+
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name = %s",
+                $transient_name
+            ));
+
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name = %s",
+                $timeout_name
+            ));
+
+            $deleted++;
+        }
+
+        return [
+            'success'          => true,
+            'transients_flushed' => $deleted,
+        ];
+    }
+
+    /**
+     * Execute get autoload report ability.
+     *
+     * Returns the largest autoloaded options and total autoload size.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error Autoload report or error.
+     */
+    public static function execute_get_autoload_report(array $input)
+    {
+        global $wpdb;
+
+        $results = $wpdb->get_results(
+            "SELECT option_name, LENGTH(option_value) as size FROM {$wpdb->options} WHERE autoload = 'yes' ORDER BY LENGTH(option_value) DESC LIMIT 30",
+            ARRAY_A
+        );
+
+        $total = (int) $wpdb->get_var(
+            "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
+        );
+
+        return [
+            'total_autoload_size'  => size_format($total, 2),
+            'total_autoload_bytes' => $total,
+            'largest_options'      => array_map(
+                fn($r) => [
+                    'name'       => $r['option_name'],
+                    'size'       => size_format((int) $r['size'], 2),
+                    'size_bytes' => (int) $r['size'],
+                ],
+                $results
+            ),
+        ];
+    }
+
+    /**
+     * Execute get performance report ability.
+     *
+     * Returns a comprehensive WordPress performance summary including
+     * active plugins, autoloaded data size, cron job count, and PHP settings.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error Performance report or error.
+     */
+    public static function execute_get_performance_report(array $input)
+    {
+        global $wpdb;
+
+        $active_plugins = get_option('active_plugins', []);
+
+        $autoload_size = (int) $wpdb->get_var(
+            "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
+        );
+
+        $crons      = _get_cron_array();
+        $cron_count = 0;
+        if (is_array($crons)) {
+            foreach ($crons as $timestamp => $hooks) {
+                foreach ($hooks as $hook => $schedules) {
+                    $cron_count += count($schedules);
+                }
+            }
+        }
+
+        $total_transients = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
+        );
+
+        $post_count    = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'publish'");
+        $revision_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'");
+
+        return [
+            'php_version'          => PHP_VERSION,
+            'memory_limit'         => ini_get('memory_limit'),
+            'max_execution_time'   => (int) ini_get('max_execution_time'),
+            'upload_max_filesize'  => ini_get('upload_max_filesize'),
+            'post_max_size'        => ini_get('post_max_size'),
+            'wordpress_version'    => get_bloginfo('version'),
+            'active_plugins'       => count($active_plugins),
+            'active_plugin_list'   => $active_plugins,
+            'autoload_size'        => size_format($autoload_size, 2),
+            'autoload_size_bytes'  => $autoload_size,
+            'cron_jobs'            => $cron_count,
+            'transients'           => $total_transients,
+            'published_posts'      => $post_count,
+            'revisions'            => $revision_count,
+            'is_multisite'         => is_multisite(),
+            'wp_debug'             => defined('WP_DEBUG') && WP_DEBUG,
+            'wp_cache'             => defined('WP_CACHE') && WP_CACHE,
+        ];
+    }
+
+    /**
+     * Bulk update multiple WooCommerce products.
+     *
+     * @param array $input {
+     *     @type array $updates Array of objects with 'id' and fields to update.
+     * }
+     * @return array|WP_Error
+     */
+    public static function execute_bulk_update_products(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        if (empty($input['updates']) || !is_array($input['updates'])) {
+            return new WP_Error('missing_updates', __('The updates parameter is required and must be an array.', 'abw-ai'));
+        }
+
+        $updated = 0;
+        $failed  = 0;
+        $results = [];
+
+        foreach ($input['updates'] as $update) {
+            if (empty($update['id'])) {
+                $failed++;
+                $results[] = ['id' => 0, 'success' => false, 'error' => 'Missing product ID'];
+                continue;
+            }
+
+            $product = wc_get_product((int) $update['id']);
+            if (!$product) {
+                $failed++;
+                $results[] = ['id' => (int) $update['id'], 'success' => false, 'error' => 'Product not found'];
+                continue;
+            }
+
+            if (isset($update['regular_price'])) {
+                $product->set_regular_price($update['regular_price']);
+            }
+            if (isset($update['sale_price'])) {
+                $product->set_sale_price($update['sale_price']);
+            }
+            if (isset($update['stock_quantity'])) {
+                $product->set_stock_quantity((int) $update['stock_quantity']);
+                $product->set_manage_stock(true);
+            }
+            if (isset($update['stock_status'])) {
+                $product->set_stock_status(sanitize_text_field($update['stock_status']));
+            }
+            if (isset($update['status'])) {
+                $product->set_status(sanitize_text_field($update['status']));
+            }
+
+            $product->save();
+            $updated++;
+            $results[] = ['id' => $product->get_id(), 'success' => true, 'name' => $product->get_name()];
+        }
+
+        return [
+            'updated' => $updated,
+            'failed'  => $failed,
+            'results' => $results,
+        ];
+    }
+
+    /**
+     * Get a WooCommerce sales report.
+     *
+     * @param array $input {
+     *     @type string $period    Report period: today, week, month, year.
+     *     @type string $date_from Start date (Y-m-d).
+     *     @type string $date_to   End date (Y-m-d).
+     * }
+     * @return array|WP_Error
+     */
+    public static function execute_get_sales_report(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        $period = sanitize_text_field($input['period'] ?? 'month');
+
+        if (!empty($input['date_from']) && !empty($input['date_to'])) {
+            $date_from = sanitize_text_field($input['date_from']);
+            $date_to   = sanitize_text_field($input['date_to']);
+        } else {
+            $now = current_time('timestamp');
+            switch ($period) {
+                case 'today':
+                    $date_from = gmdate('Y-m-d', $now);
+                    $date_to   = gmdate('Y-m-d', $now);
+                    break;
+                case 'week':
+                    $date_from = gmdate('Y-m-d', strtotime('-7 days', $now));
+                    $date_to   = gmdate('Y-m-d', $now);
+                    break;
+                case 'year':
+                    $date_from = gmdate('Y-01-01', $now);
+                    $date_to   = gmdate('Y-m-d', $now);
+                    break;
+                case 'month':
+                default:
+                    $date_from = gmdate('Y-m-01', $now);
+                    $date_to   = gmdate('Y-m-d', $now);
+                    break;
+            }
+        }
+
+        $orders = wc_get_orders([
+            'status'       => ['wc-completed', 'wc-processing'],
+            'date_created' => $date_from . '...' . $date_to . ' 23:59:59',
+            'limit'        => -1,
+        ]);
+
+        $total_revenue   = 0;
+        $product_revenue = [];
+
+        foreach ($orders as $order) {
+            $total_revenue += (float) $order->get_total();
+
+            foreach ($order->get_items() as $item) {
+                $pid  = $item->get_product_id();
+                $name = $item->get_name();
+                if (!isset($product_revenue[$pid])) {
+                    $product_revenue[$pid] = ['name' => $name, 'revenue' => 0, 'quantity' => 0];
+                }
+                $product_revenue[$pid]['revenue']  += (float) $item->get_total();
+                $product_revenue[$pid]['quantity'] += $item->get_quantity();
+            }
+        }
+
+        usort($product_revenue, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
+        $top_products = array_slice($product_revenue, 0, 5);
+
+        $order_count = count($orders);
+
+        return [
+            'period'              => $period,
+            'date_from'           => $date_from,
+            'date_to'             => $date_to,
+            'total_revenue'       => round($total_revenue, 2),
+            'total_orders'        => $order_count,
+            'average_order_value' => $order_count > 0 ? round($total_revenue / $order_count, 2) : 0,
+            'top_products'        => $top_products,
+            'currency'            => get_woocommerce_currency(),
+        ];
+    }
+
+    /**
+     * Get WooCommerce customer statistics.
+     *
+     * @param array $input Ability input (unused).
+     * @return array|WP_Error
+     */
+    public static function execute_get_customer_stats(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        $customer_query = new \WP_User_Query([
+            'role'   => 'customer',
+            'fields' => 'ID',
+        ]);
+        $total_customers = (int) $customer_query->get_total();
+
+        $repeat_customers = 0;
+        $customer_ids     = $customer_query->get_results();
+
+        foreach ($customer_ids as $cid) {
+            $order_count = wc_get_customer_order_count((int) $cid);
+            if ($order_count > 1) {
+                $repeat_customers++;
+            }
+        }
+
+        $repeat_rate = $total_customers > 0 ? round(($repeat_customers / $total_customers) * 100, 2) : 0;
+
+        global $wpdb;
+        $avg_order = (float) $wpdb->get_var(
+            "SELECT AVG(meta_value) FROM {$wpdb->postmeta} pm
+             JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = '_order_total'
+             AND p.post_type = 'shop_order'
+             AND p.post_status IN ('wc-completed', 'wc-processing')"
+        );
+
+        $month_start = gmdate('Y-m-01 00:00:00');
+        $new_this_month = (int) (new \WP_User_Query([
+            'role'       => 'customer',
+            'date_query' => [['after' => $month_start]],
+            'fields'     => 'ID',
+            'count_total' => true,
+        ]))->get_total();
+
+        return [
+            'total_customers'       => $total_customers,
+            'repeat_rate'           => $repeat_rate,
+            'average_order_value'   => round($avg_order, 2),
+            'new_customers_this_month' => $new_this_month,
+        ];
+    }
+
+    /**
+     * Create a WooCommerce coupon.
+     *
+     * @param array $input {
+     *     @type string $code          Coupon code (required).
+     *     @type string $discount_type Discount type: percent, fixed_cart, fixed_product.
+     *     @type float  $amount        Discount amount (required).
+     *     @type string $expiry_date   Expiry date (Y-m-d).
+     *     @type int    $usage_limit   Maximum usage count.
+     *     @type float  $minimum_amount Minimum order amount.
+     *     @type float  $maximum_amount Maximum order amount.
+     *     @type bool   $individual_use Whether coupon can be combined.
+     *     @type array  $product_ids   Applicable product IDs.
+     * }
+     * @return array|WP_Error
+     */
+    public static function execute_create_coupon(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        if (empty($input['code'])) {
+            return new WP_Error('missing_code', __('The code parameter is required.', 'abw-ai'));
+        }
+        if (!isset($input['amount'])) {
+            return new WP_Error('missing_amount', __('The amount parameter is required.', 'abw-ai'));
+        }
+
+        $coupon = new \WC_Coupon();
+        $coupon->set_code(sanitize_text_field($input['code']));
+        $coupon->set_discount_type(sanitize_text_field($input['discount_type'] ?? 'percent'));
+        $coupon->set_amount((float) $input['amount']);
+
+        if (!empty($input['expiry_date'])) {
+            $coupon->set_date_expires(sanitize_text_field($input['expiry_date']));
+        }
+        if (isset($input['usage_limit'])) {
+            $coupon->set_usage_limit((int) $input['usage_limit']);
+        }
+        if (isset($input['minimum_amount'])) {
+            $coupon->set_minimum_amount((float) $input['minimum_amount']);
+        }
+        if (isset($input['maximum_amount'])) {
+            $coupon->set_maximum_amount((float) $input['maximum_amount']);
+        }
+        if (isset($input['individual_use'])) {
+            $coupon->set_individual_use((bool) $input['individual_use']);
+        }
+        if (!empty($input['product_ids']) && is_array($input['product_ids'])) {
+            $coupon->set_product_ids(array_map('intval', $input['product_ids']));
+        }
+
+        $coupon->save();
+
+        return [
+            'id'            => $coupon->get_id(),
+            'code'          => $coupon->get_code(),
+            'discount_type' => $coupon->get_discount_type(),
+            'amount'        => $coupon->get_amount(),
+            'expiry_date'   => $coupon->get_date_expires() ? $coupon->get_date_expires()->date('Y-m-d') : null,
+        ];
+    }
+
+    /**
+     * List WooCommerce coupons.
+     *
+     * @param array $input {
+     *     @type int    $per_page Coupons per page (default 20).
+     *     @type string $status   Post status filter.
+     * }
+     * @return array|WP_Error
+     */
+    public static function execute_list_coupons(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        $per_page = (int) ($input['per_page'] ?? 20);
+        $args     = [
+            'post_type'      => 'shop_coupon',
+            'posts_per_page' => min($per_page, 100),
+            'post_status'    => !empty($input['status']) ? sanitize_text_field($input['status']) : 'publish',
+        ];
+
+        $posts   = get_posts($args);
+        $coupons = [];
+
+        foreach ($posts as $post) {
+            $coupon    = new \WC_Coupon($post->ID);
+            $coupons[] = [
+                'id'            => $coupon->get_id(),
+                'code'          => $coupon->get_code(),
+                'discount_type' => $coupon->get_discount_type(),
+                'amount'        => $coupon->get_amount(),
+                'usage_count'   => $coupon->get_usage_count(),
+                'usage_limit'   => $coupon->get_usage_limit(),
+                'expiry_date'   => $coupon->get_date_expires() ? $coupon->get_date_expires()->date('Y-m-d') : null,
+            ];
+        }
+
+        return $coupons;
+    }
+
+    /**
+     * Analyze sales performance of a specific WooCommerce product.
+     *
+     * @param array $input {
+     *     @type int    $product_id Product ID (required).
+     *     @type string $period     Analysis period: week, month, year.
+     * }
+     * @return array|WP_Error
+     */
+    public static function execute_analyze_product_performance(array $input)
+    {
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce is not active.', 'abw-ai'));
+        }
+
+        if (empty($input['product_id'])) {
+            return new WP_Error('missing_product_id', __('The product_id parameter is required.', 'abw-ai'));
+        }
+
+        $product_id = (int) $input['product_id'];
+        $product    = wc_get_product($product_id);
+        if (!$product) {
+            return new WP_Error('product_not_found', __('Product not found.', 'abw-ai'));
+        }
+
+        $period = sanitize_text_field($input['period'] ?? 'month');
+        $now    = current_time('timestamp');
+
+        switch ($period) {
+            case 'week':
+                $date_from = gmdate('Y-m-d', strtotime('-7 days', $now));
+                break;
+            case 'year':
+                $date_from = gmdate('Y-01-01', $now);
+                break;
+            case 'month':
+            default:
+                $date_from = gmdate('Y-m-01', $now);
+                break;
+        }
+
+        $date_to = gmdate('Y-m-d', $now);
+
+        $orders = wc_get_orders([
+            'status'       => ['wc-completed', 'wc-processing'],
+            'date_created' => $date_from . '...' . $date_to . ' 23:59:59',
+            'limit'        => -1,
+        ]);
+
+        $units_sold    = 0;
+        $revenue       = 0;
+        $orders_with   = 0;
+
+        foreach ($orders as $order) {
+            $found = false;
+            foreach ($order->get_items() as $item) {
+                if ($item->get_product_id() === $product_id || $item->get_variation_id() === $product_id) {
+                    $units_sold += $item->get_quantity();
+                    $revenue    += (float) $item->get_total();
+                    $found       = true;
+                }
+            }
+            if ($found) {
+                $orders_with++;
+            }
+        }
+
+        return [
+            'product_id'   => $product_id,
+            'product_name' => $product->get_name(),
+            'units_sold'   => $units_sold,
+            'revenue'      => round($revenue, 2),
+            'orders'       => $orders_with,
+            'period'       => $period,
+            'date_from'    => $date_from,
+            'date_to'      => $date_to,
+            'currency'     => get_woocommerce_currency(),
         ];
     }
 }

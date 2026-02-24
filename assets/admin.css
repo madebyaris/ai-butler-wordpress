@@ -8,9 +8,9 @@
    Design Tokens
    ========================================================================== */
 :root {
-	--abw-admin-primary: #6366f1;
-	--abw-admin-primary-hover: #4f46e5;
-	--abw-admin-primary-light: #eef2ff;
+	--abw-admin-primary: #0073aa;
+	--abw-admin-primary-hover: #006799;
+	--abw-admin-primary-light: #f0f6fc;
 	--abw-admin-surface: #ffffff;
 	--abw-admin-surface-2: #f8fafc;
 	--abw-admin-surface-3: #f1f5f9;
@@ -184,7 +184,7 @@
 
 .abw-select:focus {
 	border-color: var(--abw-admin-primary);
-	box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15);
+	box-shadow: 0 0 0 3px rgb(0 115 170 / 0.15);
 	outline: none;
 }
 

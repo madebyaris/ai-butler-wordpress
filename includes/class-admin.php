@@ -66,6 +66,15 @@ class ABW_Admin {
 			'abw-ai-jobs',
 			[ __CLASS__, 'render_jobs_page' ]
 		);
+
+		add_submenu_page(
+			'ayu-ai',
+			__( 'Debug Log', 'abw-ai' ),
+			__( 'Debug Log', 'abw-ai' ),
+			'manage_options',
+			'abw-ai-debug',
+			[ __CLASS__, 'render_debug_page' ]
+		);
 	}
 
 	/**
@@ -170,7 +179,8 @@ class ABW_Admin {
 			// Sidebar settings
 			update_option( 'abw_sidebar_default_state', isset( $_POST['abw_sidebar_default_state'] ) ? sanitize_text_field( $_POST['abw_sidebar_default_state'] ) : 'closed' );
 			update_option( 'abw_sidebar_default_width', isset( $_POST['abw_sidebar_default_width'] ) ? absint( $_POST['abw_sidebar_default_width'] ) : 370 );
-			
+			update_option( 'abw_debug_log', isset( $_POST['abw_debug_log'] ) );
+
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'abw-ai' ) . '</p></div>';
 		}
 
@@ -195,6 +205,18 @@ class ABW_Admin {
 								<input type="checkbox" id="abw_chat_enabled" name="abw_chat_enabled" value="1" <?php checked( $chat_enabled ); ?> />
 								<?php esc_html_e( 'Show floating chat widget in WordPress admin', 'abw-ai' ); ?>
 							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="abw_debug_log"><?php esc_html_e( 'Debug Log', 'abw-ai' ); ?></label></th>
+						<td>
+							<label>
+								<input type="checkbox" id="abw_debug_log" name="abw_debug_log" value="1" <?php checked( get_option( 'abw_debug_log', false ) ); ?> />
+								<?php esc_html_e( 'Log chat requests, AI calls, and tool execution to wp-content/abw-ai-logs/ for debugging', 'abw-ai' ); ?>
+							</label>
+							<p class="description">
+								<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug' ) ); ?>"><?php esc_html_e( 'View Debug Log', 'abw-ai' ); ?></a>
+							</p>
 						</td>
 					</tr>
 					<tr>
@@ -462,6 +484,98 @@ class ABW_Admin {
 					?>
 				</p>
 			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render Debug Log page
+	 */
+	public static function render_debug_page() {
+		$enabled = ABW_Debug_Log::is_enabled();
+		$log_dir = ABW_Debug_Log::get_log_dir();
+		$files   = ABW_Debug_Log::list_log_files();
+
+		// Handle view/download.
+		$view_file = isset( $_GET['view'] ) ? sanitize_file_name( wp_unslash( $_GET['view'] ) ) : '';
+		if ( $view_file && current_user_can( 'manage_options' ) ) {
+			$content = ABW_Debug_Log::get_log_content( $view_file );
+			if ( is_wp_error( $content ) ) {
+				echo '<div class="wrap"><div class="notice notice-error"><p>' . esc_html( $content->get_error_message() ) . '</p></div></div>';
+				return;
+			}
+			if ( isset( $_GET['download'] ) ) {
+				header( 'Content-Type: application/octet-stream' );
+				header( 'Content-Disposition: attachment; filename="' . esc_attr( $view_file ) . '"' );
+				header( 'Content-Length: ' . strlen( $content ) );
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo $content;
+				exit;
+			}
+			?>
+			<div class="wrap">
+				<h1><?php esc_html_e( 'Debug Log:', 'abw-ai' ); ?> <?php echo esc_html( $view_file ); ?></h1>
+				<p>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug' ) ); ?>" class="button"><?php esc_html_e( '&larr; Back to Logs', 'abw-ai' ); ?></a>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $view_file ) . '&download=1' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
+				</p>
+				<pre style="background:#1e293b;color:#e2e8f0;padding:16px;overflow:auto;max-height:70vh;font-size:12px;line-height:1.5;"><?php echo esc_html( $content ); ?></pre>
+			</div>
+			<?php
+			return;
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Debug Log', 'abw-ai' ); ?></h1>
+
+			<?php if ( ! $enabled ) : ?>
+				<div class="notice notice-warning">
+					<p>
+						<?php esc_html_e( 'Debug logging is disabled. Enable it in', 'abw-ai' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=ayu-ai-settings' ) ); ?>"><?php esc_html_e( 'ABW-AI Settings', 'abw-ai' ); ?></a>
+						<?php esc_html_e( 'to record chat requests, AI calls, and tool execution.', 'abw-ai' ); ?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: Log directory path */
+					esc_html__( 'Logs are saved to %s', 'abw-ai' ),
+					'<code>' . esc_html( $log_dir ) . '</code>'
+				);
+				?>
+			</p>
+
+			<?php if ( empty( $files ) ) : ?>
+				<p><?php esc_html_e( 'No log files yet. Send a chat message with debug mode enabled to create logs.', 'abw-ai' ); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'File', 'abw-ai' ); ?></th>
+							<th><?php esc_html_e( 'Size', 'abw-ai' ); ?></th>
+							<th><?php esc_html_e( 'Modified', 'abw-ai' ); ?></th>
+							<th><?php esc_html_e( 'Actions', 'abw-ai' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $files as $f ) : ?>
+							<tr>
+								<td><code><?php echo esc_html( $f['name'] ); ?></code></td>
+								<td><?php echo esc_html( $f['size'] ); ?></td>
+								<td><?php echo esc_html( $f['date'] ); ?></td>
+								<td>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) ) ); ?>"><?php esc_html_e( 'View', 'abw-ai' ); ?></a>
+									|
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) . '&download=1' ) ); ?>"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 		</div>
 		<?php
 	}

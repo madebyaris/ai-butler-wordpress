@@ -10,6 +10,10 @@
 import { useRef, useEffect } from '@wordpress/element';
 import { formatMessage } from '../utils/format-message';
 
+const AssistantIcon = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+);
+
 /**
  * Single message component.
  *
@@ -22,9 +26,11 @@ import { formatMessage } from '../utils/format-message';
 function Message( { role, content, userName } ) {
 	const avatarContent = role === 'user'
 		? ( userName || 'U' ).charAt( 0 ).toUpperCase()
-		: '\u{1F916}';
+		: <AssistantIcon />;
 
-	const formattedContent = formatMessage( content );
+	const hasContent = content != null && String( content ).trim() !== '';
+	const displayContent = hasContent ? content : ( role === 'assistant' ? 'Task completed.' : '' );
+	const formattedContent = formatMessage( displayContent );
 
 	return (
 		<div className={ `abw-message abw-message-${ role }` }>
@@ -45,13 +51,66 @@ function Message( { role, content, userName } ) {
 function TypingIndicator() {
 	return (
 		<div className="abw-message abw-message-assistant abw-typing-message">
-			<div className="abw-message-avatar">{ '\u{1F916}' }</div>
+			<div className="abw-message-avatar"><AssistantIcon /></div>
 			<div className="abw-message-content">
 				<div className="abw-typing">
 					<span className="abw-typing-dot" />
 					<span className="abw-typing-dot" />
 					<span className="abw-typing-dot" />
 				</div>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Agentic steps indicator (thinking, tool calls, results).
+ *
+ * @param {Object}   props       Component props.
+ * @param {Array}    props.steps Array of step objects.
+ * @return {import('@wordpress/element').WPElement} Steps element.
+ */
+function AgentStepsIndicator( { steps } ) {
+	if ( ! steps || steps.length === 0 ) {
+		return (
+			<div className="abw-message abw-message-assistant abw-typing-message">
+				<div className="abw-message-avatar"><AssistantIcon /></div>
+				<div className="abw-message-content">
+					<div className="abw-agent-step abw-agent-step-progress">Thinking...</div>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="abw-message abw-message-assistant abw-typing-message">
+			<div className="abw-message-avatar"><AssistantIcon /></div>
+			<div className="abw-message-content">
+				{ steps.map( ( step, i ) => {
+					if ( step.type === 'thinking' && step.content ) {
+						const text = step.content.length > 200 ? step.content.substring( 0, 200 ) + '...' : step.content;
+						return (
+							<div key={ i } className="abw-agent-step abw-agent-step-thinking">
+								{ text }
+							</div>
+						);
+					}
+					if ( step.type === 'tool_call' ) {
+						return (
+							<div key={ i } className="abw-agent-step abw-agent-step-tool">
+								{ step.name }…
+							</div>
+						);
+					}
+					if ( step.type === 'tool_result' ) {
+						return (
+							<div key={ i } className="abw-agent-step abw-agent-step-result">
+								{ step.name } done
+							</div>
+						);
+					}
+					return null;
+				} ) }
 			</div>
 		</div>
 	);
@@ -96,12 +155,13 @@ function WelcomeMessage( { onSuggestion } ) {
  * @param {Object}   props               Component props.
  * @param {Array}    props.messages       Array of { role, content } objects.
  * @param {boolean}  props.isLoading      Whether the AI is thinking.
+ * @param {Array}    props.agentSteps     Agentic steps for step-by-step display.
  * @param {string}   props.userName       Current user name.
  * @param {Function} props.onSuggestion   Callback when a suggestion is clicked.
  * @param {Object}   props.actionStatus   Current block action status.
  * @return {import('@wordpress/element').WPElement} Messages container.
  */
-export function ChatMessages( { messages, isLoading, userName, onSuggestion, actionStatus } ) {
+export function ChatMessages( { messages, isLoading, agentSteps = [], userName, onSuggestion, actionStatus } ) {
 	const containerRef = useRef( null );
 
 	// Auto-scroll to bottom on new messages.
@@ -137,7 +197,7 @@ export function ChatMessages( { messages, isLoading, userName, onSuggestion, act
 				</div>
 			) }
 
-			{ isLoading && <TypingIndicator /> }
+			{ isLoading && <AgentStepsIndicator steps={ agentSteps } /> }
 		</div>
 	);
 }

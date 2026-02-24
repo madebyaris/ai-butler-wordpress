@@ -373,6 +373,8 @@ class ABW_AI_Router
     /**
      * Format messages for OpenAI API
      *
+     * Supports multi-turn tool calling: assistant with tool_calls, tool role messages.
+     *
      * @param array $messages Raw messages
      * @return array
      */
@@ -381,9 +383,29 @@ class ABW_AI_Router
         $formatted = [];
 
         foreach ($messages as $msg) {
+            $role = $msg['role'];
+
+            if ($role === 'tool') {
+                $formatted[] = [
+                    'role'         => 'tool',
+                    'tool_call_id' => $msg['tool_call_id'],
+                    'content'      => is_array($msg['content']) ? wp_json_encode($msg['content']) : (string) $msg['content'],
+                ];
+                continue;
+            }
+
+            if ($role === 'assistant' && ! empty($msg['tool_calls'])) {
+                $formatted[] = [
+                    'role'       => 'assistant',
+                    'content'    => $msg['content'] ?? null,
+                    'tool_calls' => $msg['tool_calls'],
+                ];
+                continue;
+            }
+
             $formatted[] = [
-                'role'    => $msg['role'],
-                'content' => $msg['content'],
+                'role'    => $role,
+                'content' => is_array($msg['content']) ? wp_json_encode($msg['content']) : (string) ($msg['content'] ?? ''),
             ];
         }
 
@@ -393,22 +415,125 @@ class ABW_AI_Router
     /**
      * Format messages for Anthropic API
      *
+     * Supports multi-turn tool calling: assistant with content blocks (tool_use),
+     * user with content blocks (tool_result). Consecutive tool messages are
+     * collapsed into one user message with multiple tool_result blocks.
+     *
      * @param array $messages Raw messages
      * @return array
      */
     private static function format_messages_anthropic(array $messages): array
     {
         $formatted = [];
+        $tool_results_buf = [];
 
         foreach ($messages as $msg) {
-            // Convert 'assistant' tool results to expected format
+            $role    = $msg['role'];
+            $content = $msg['content'];
+
+            if ($role === 'tool') {
+                $tool_results_buf[] = [
+                    'type'         => 'tool_result',
+                    'tool_use_id'  => $msg['tool_call_id'],
+                    'content'      => is_array($content) ? wp_json_encode($content) : (string) $content,
+                    'is_error'     => $msg['is_error'] ?? false,
+                ];
+                continue;
+            }
+
+            if (! empty($tool_results_buf)) {
+                $formatted[] = [
+                    'role'    => 'user',
+                    'content' => $tool_results_buf,
+                ];
+                $tool_results_buf = [];
+            }
+
+            if ($role === 'assistant' && isset($msg['tool_calls']) && ! empty($msg['tool_calls'])) {
+                $blocks = [];
+                if (! empty($msg['content'])) {
+                    $blocks[] = [
+                        'type' => 'text',
+                        'text' => is_string($msg['content']) ? $msg['content'] : wp_json_encode($msg['content']),
+                    ];
+                }
+                foreach ($msg['tool_calls'] as $call) {
+                    $blocks[] = [
+                        'type'  => 'tool_use',
+                        'id'    => $call['id'],
+                        'name'  => $call['name'],
+                        'input' => $call['arguments'] ?? [],
+                    ];
+                }
+                $formatted[] = [
+                    'role'    => 'assistant',
+                    'content' => $blocks,
+                ];
+                continue;
+            }
+
             $formatted[] = [
-                'role'    => $msg['role'],
-                'content' => $msg['content'],
+                'role'    => $role,
+                'content' => is_array($content) ? $content : (string) ($content ?? ''),
+            ];
+        }
+
+        if (! empty($tool_results_buf)) {
+            $formatted[] = [
+                'role'    => 'user',
+                'content' => $tool_results_buf,
             ];
         }
 
         return $formatted;
+    }
+
+    /**
+     * Build messages to append after tool execution (for multi-turn agentic loop).
+     *
+     * Returns the assistant message + tool result messages in provider-agnostic format.
+     * Caller appends these to the messages array before the next AI call.
+     *
+     * @param array $assistant_response Response from parse_openai_response or parse_anthropic_response.
+     * @param array $tool_results       Array of ['id' => tool_call_id, 'name' => string, 'result' => mixed].
+     * @return array Messages to append (assistant + tool results).
+     */
+    public static function build_tool_result_messages(array $assistant_response, array $tool_results): array
+    {
+        $to_append = [];
+
+        $content  = $assistant_response['content'] ?? '';
+        $tool_calls = $assistant_response['tool_calls'] ?? [];
+
+        $to_append[] = [
+            'role'       => 'assistant',
+            'content'    => $content,
+            'tool_calls' => $tool_calls,
+        ];
+
+        foreach ($tool_results as $tr) {
+            $id     = $tr['id'] ?? '';
+            $result = $tr['result'] ?? $tr;
+            $is_error = isset($tr['is_error']) && $tr['is_error'];
+
+            if (is_object($result) && is_a($result, 'WP_Error')) {
+                $result  = $result->get_error_message();
+                $is_error = true;
+            } elseif (is_array($result) || is_object($result)) {
+                $result = wp_json_encode($result);
+            } else {
+                $result = (string) $result;
+            }
+
+            $to_append[] = [
+                'role'         => 'tool',
+                'tool_call_id' => $id,
+                'content'     => $result,
+                'is_error'     => $is_error,
+            ];
+        }
+
+        return $to_append;
     }
 
     /**
@@ -554,9 +679,11 @@ class ABW_AI_Router
             'list_plugins'       => ['ABW_Abilities_Registration', 'execute_list_plugins'],
             'activate_plugin'    => ['ABW_Abilities_Registration', 'execute_activate_plugin'],
             'deactivate_plugin'  => ['ABW_Abilities_Registration', 'execute_deactivate_plugin'],
+            'update_plugin'      => ['ABW_Abilities_Registration', 'execute_update_plugin'],
             // Themes
             'list_themes'        => ['ABW_Abilities_Registration', 'execute_list_themes'],
             'activate_theme'     => ['ABW_Abilities_Registration', 'execute_activate_theme'],
+            'update_theme'       => ['ABW_Abilities_Registration', 'execute_update_theme'],
             // Site Info
             'get_site_info'      => ['ABW_Abilities_Registration', 'execute_get_site_info'],
             'update_site_identity' => ['ABW_Abilities_Registration', 'execute_update_site_identity'],
@@ -641,6 +768,60 @@ class ABW_AI_Router
             'remove_editor_blocks'    => [__CLASS__, 'execute_remove_editor_blocks'],
             'save_current_post'       => [__CLASS__, 'execute_save_current_post'],
             'update_post_details'     => [__CLASS__, 'execute_update_post_details'],
+            // Brand Voice
+            'train_brand_voice'      => ['ABW_Brand_Voice', 'train_brand_voice'],
+            'get_brand_voice'        => ['ABW_Brand_Voice', 'get_brand_voice'],
+            // AI Workflows
+            'create_workflow'        => ['ABW_AI_Workflows', 'create_workflow'],
+            'list_workflows'         => ['ABW_AI_Workflows', 'list_workflows'],
+            'toggle_workflow'        => ['ABW_AI_Workflows', 'toggle_workflow'],
+            'run_workflow'           => ['ABW_AI_Workflows', 'run_workflow'],
+            // Database & Performance
+            'get_database_stats'     => ['ABW_Abilities_Registration', 'execute_get_database_stats'],
+            'cleanup_database'       => ['ABW_Abilities_Registration', 'execute_cleanup_database'],
+            'optimize_database_tables' => ['ABW_Abilities_Registration', 'execute_optimize_database_tables'],
+            'list_cron_jobs'         => ['ABW_Abilities_Registration', 'execute_list_cron_jobs'],
+            'delete_cron_job'        => ['ABW_Abilities_Registration', 'execute_delete_cron_job'],
+            'list_transients'        => ['ABW_Abilities_Registration', 'execute_list_transients'],
+            'flush_transients'       => ['ABW_Abilities_Registration', 'execute_flush_transients'],
+            'get_autoload_report'    => ['ABW_Abilities_Registration', 'execute_get_autoload_report'],
+            'get_performance_report' => ['ABW_Abilities_Registration', 'execute_get_performance_report'],
+            // Security
+            'scan_file_integrity'    => ['ABW_Security_Tools', 'scan_file_integrity'],
+            'list_failed_logins'     => ['ABW_Security_Tools', 'list_failed_logins'],
+            'check_file_permissions' => ['ABW_Security_Tools', 'check_file_permissions'],
+            'get_security_report'    => ['ABW_Security_Tools', 'get_security_report'],
+            'list_admin_users'       => ['ABW_Security_Tools', 'list_admin_users'],
+            'check_ssl_status'       => ['ABW_Security_Tools', 'check_ssl_status'],
+            // New AI Content Tools
+            'generate_product_description' => ['ABW_AI_Tools', 'generate_product_description'],
+            'rewrite_for_tone'       => ['ABW_AI_Tools', 'rewrite_for_tone'],
+            'generate_outline'       => ['ABW_AI_Tools', 'generate_outline'],
+            'expand_from_outline'    => ['ABW_AI_Tools', 'expand_from_outline'],
+            'generate_excerpt_ai'    => ['ABW_AI_Tools', 'generate_excerpt_ai'],
+            'generate_table_of_contents' => ['ABW_AI_Tools', 'generate_table_of_contents'],
+            // New SEO Tools
+            'analyze_seo_score'      => ['ABW_AI_Tools', 'analyze_seo_score'],
+            'suggest_internal_links' => ['ABW_AI_Tools', 'suggest_internal_links'],
+            'generate_slug'          => ['ABW_AI_Tools', 'generate_slug'],
+            'check_broken_links'     => ['ABW_AI_Tools', 'check_broken_links'],
+
+            // WooCommerce Deep
+            'bulk_update_products'   => ['ABW_Abilities_Registration', 'execute_bulk_update_products'],
+            'get_sales_report'       => ['ABW_Abilities_Registration', 'execute_get_sales_report'],
+            'get_customer_stats'     => ['ABW_Abilities_Registration', 'execute_get_customer_stats'],
+            'create_coupon'          => ['ABW_Abilities_Registration', 'execute_create_coupon'],
+            'list_coupons'           => ['ABW_Abilities_Registration', 'execute_list_coupons'],
+            'analyze_product_performance' => ['ABW_Abilities_Registration', 'execute_analyze_product_performance'],
+            // i18n Tools
+            'detect_and_translate_post' => ['ABW_AI_Tools', 'detect_and_translate_post'],
+            'bulk_translate_posts'   => ['ABW_AI_Tools', 'bulk_translate_posts'],
+            'manage_translations'    => ['ABW_AI_Tools', 'manage_translations'],
+            // Analytics & Reporting
+            'get_content_calendar'   => ['ABW_AI_Tools', 'get_content_calendar'],
+            'get_publishing_stats'   => ['ABW_AI_Tools', 'get_publishing_stats'],
+            'get_comment_stats'      => ['ABW_AI_Tools', 'get_comment_stats'],
+            'generate_site_report'   => ['ABW_AI_Tools', 'generate_site_report'],
         ];
 
         if (! isset($tool_mapping[$tool_name])) {
@@ -1084,6 +1265,17 @@ class ABW_AI_Router
                     ],
                 ],
             ],
+            [
+                'name'        => 'update_plugin',
+                'description' => 'Update a WordPress plugin to the latest available version',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['plugin'],
+                    'properties' => [
+                        'plugin' => ['type' => 'string', 'description' => 'Plugin file path'],
+                    ],
+                ],
+            ],
             // Themes
             [
                 'name'        => 'list_themes',
@@ -1101,10 +1293,36 @@ class ABW_AI_Router
                     ],
                 ],
             ],
+            [
+                'name'        => 'update_theme',
+                'description' => 'Update a WordPress theme to the latest available version',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['stylesheet'],
+                    'properties' => [
+                        'stylesheet' => ['type' => 'string', 'description' => 'Theme directory name'],
+                    ],
+                ],
+            ],
             // Site Info
             [
                 'name'        => 'get_site_info',
-                'description' => 'Get WordPress site information',
+                'description' => 'Get general WordPress site information (name, URL, version, theme). Not for update checks.',
+                'parameters'  => ['type' => 'object', 'properties' => []],
+            ],
+            [
+                'name'        => 'get_site_health',
+                'description' => 'Get WordPress Site Health test results and statuses',
+                'parameters'  => ['type' => 'object', 'properties' => []],
+            ],
+            [
+                'name'        => 'check_plugin_updates',
+                'description' => 'Check which installed plugins have updates available (name, current version, new version)',
+                'parameters'  => ['type' => 'object', 'properties' => []],
+            ],
+            [
+                'name'        => 'check_theme_updates',
+                'description' => 'Check which installed themes have updates available (name, current version, new version)',
                 'parameters'  => ['type' => 'object', 'properties' => []],
             ],
             [
@@ -1241,6 +1459,72 @@ class ABW_AI_Router
                     ],
                 ],
             ];
+            $tools[] = [
+                'name'        => 'bulk_update_products',
+                'description' => 'Bulk update multiple WooCommerce products (price, stock, status)',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['updates'],
+                    'properties' => [
+                        'updates' => ['type' => 'array', 'description' => 'Array of product updates, each with id and fields to update', 'items' => ['type' => 'object']],
+                    ],
+                ],
+            ];
+            $tools[] = [
+                'name'        => 'get_sales_report',
+                'description' => 'Get WooCommerce sales report with revenue, order count, and top products',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'period'    => ['type' => 'string', 'description' => 'Report period: today, week, month, year', 'default' => 'month'],
+                        'date_from' => ['type' => 'string', 'description' => 'Start date (Y-m-d)'],
+                        'date_to'   => ['type' => 'string', 'description' => 'End date (Y-m-d)'],
+                    ],
+                ],
+            ];
+            $tools[] = [
+                'name'        => 'get_customer_stats',
+                'description' => 'Get WooCommerce customer statistics including total customers, repeat rate, and average order value',
+                'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+            ];
+            $tools[] = [
+                'name'        => 'create_coupon',
+                'description' => 'Create a WooCommerce coupon code',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['code', 'amount'],
+                    'properties' => [
+                        'code'          => ['type' => 'string', 'description' => 'Coupon code'],
+                        'discount_type' => ['type' => 'string', 'description' => 'Type: percent, fixed_cart, fixed_product', 'default' => 'percent'],
+                        'amount'        => ['type' => 'number', 'description' => 'Discount amount'],
+                        'expiry_date'   => ['type' => 'string', 'description' => 'Expiry date (Y-m-d)'],
+                        'usage_limit'   => ['type' => 'integer', 'description' => 'Maximum usage count'],
+                        'minimum_amount' => ['type' => 'number', 'description' => 'Minimum order amount'],
+                    ],
+                ],
+            ];
+            $tools[] = [
+                'name'        => 'list_coupons',
+                'description' => 'List WooCommerce coupons',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'per_page' => ['type' => 'integer', 'description' => 'Coupons per page', 'default' => 20],
+                    ],
+                ],
+            ];
+            $tools[] = [
+                'name'        => 'analyze_product_performance',
+                'description' => 'Analyze sales performance of a specific WooCommerce product',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['product_id'],
+                    'properties' => [
+                        'product_id' => ['type' => 'integer', 'description' => 'Product ID to analyze'],
+                        'period'     => ['type' => 'string', 'description' => 'Analysis period: week, month, year', 'default' => 'month'],
+                    ],
+                ],
+            ];
         }
 
         // Block Editor tools (only included when editor context is present)
@@ -1315,6 +1599,77 @@ class ABW_AI_Router
         $ai_tools = ABW_AI_Tools::get_tools_list();
         $tools = array_merge($tools, $ai_tools);
 
+        // Add Brand Voice tools
+        $brand_voice_tools = ABW_Brand_Voice::get_tools_list();
+        $tools = array_merge($tools, $brand_voice_tools);
+
+        // Add Workflow tools
+        $workflow_tools = ABW_AI_Workflows::get_tools_list();
+        $tools = array_merge($tools, $workflow_tools);
+
+        // Add Security tools
+        $security_tools = ABW_Security_Tools::get_tools_list();
+        $tools = array_merge($tools, $security_tools);
+
+        // Add Database & Performance tools
+        $tools[] = [
+            'name'        => 'get_database_stats',
+            'description' => 'Get database statistics including table sizes, row counts, and total database size',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'cleanup_database',
+            'description' => 'Clean up the WordPress database by removing revisions, auto-drafts, trashed posts, spam comments, and expired transients',
+            'parameters'  => [
+                'type'       => 'object',
+                'properties' => [
+                    'types' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Types to clean: revisions, auto_drafts, trashed_posts, spam_comments, trashed_comments, expired_transients. Defaults to all.'],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'optimize_database_tables',
+            'description' => 'Run OPTIMIZE TABLE on all WordPress database tables to reclaim space and improve performance',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'list_cron_jobs',
+            'description' => 'List all scheduled WordPress cron events with their hooks, schedules, and next run times',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'delete_cron_job',
+            'description' => 'Delete a scheduled WordPress cron event by its hook name',
+            'parameters'  => [
+                'type'       => 'object',
+                'required'   => ['hook'],
+                'properties' => [
+                    'hook'      => ['type' => 'string', 'description' => 'Cron hook name to delete'],
+                    'timestamp' => ['type' => 'integer', 'description' => 'Specific timestamp to unschedule (optional)'],
+                ],
+            ],
+        ];
+        $tools[] = [
+            'name'        => 'list_transients',
+            'description' => 'List transient counts (total, expired, active) in the WordPress database',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'flush_transients',
+            'description' => 'Delete all expired transients from the WordPress database',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'get_autoload_report',
+            'description' => 'Report the largest autoloaded options in wp_options, which impact every page load',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+        $tools[] = [
+            'name'        => 'get_performance_report',
+            'description' => 'Get a comprehensive WordPress performance report including PHP info, plugin count, database stats, and cron jobs',
+            'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
+        ];
+
         return $tools;
     }
 
@@ -1348,8 +1703,8 @@ Your capabilities:
 - USERS: Create, update, delete, list, and get user details. You can create users with username, email, password (auto-generated if not provided), display name, and role
 - MEDIA: Upload, update, delete, and list media files. Upload from URLs or base64 data
 - COMMENTS: List and moderate comments (approve, hold, spam, trash)
-- PLUGINS: List, activate, and deactivate plugins
-- THEMES: List and activate themes
+- PLUGINS: List, activate, deactivate, check updates, and update plugins
+- THEMES: List, activate, check updates, and update themes
 - TAXONOMIES: List taxonomies, create/update/delete terms (categories, tags, custom taxonomies)
 - MENUS: Create menus, add/update/delete menu items, assign menu locations
 - SITE OPTIONS: Get and update WordPress options (safely whitelisted options only)
@@ -1358,7 +1713,16 @@ Your capabilities:
 - SITE HEALTH: Get site health status, check for plugin/theme updates
 - BLOCK THEMES: List block patterns and template parts (for block themes)
 - ELEMENTOR: List and update Elementor pages and templates (if Elementor is active)
-- WOOCOMMERCE: List products/orders, get product/order details, update product/order status (if WooCommerce is active)
+- WOOCOMMERCE: List/update products and orders, sales reports, customer stats, coupons, product performance analysis (if WooCommerce is active)
+- AI CONTENT: Generate posts, product descriptions, outlines, excerpts, TOC, rewrite for tone, expand outlines into full content
+- BRAND VOICE: Train brand voice from existing posts, apply consistent writing style
+- SEO SUITE: Analyze SEO score, suggest internal links, generate slugs, check broken links, generate schema markup, generate SEO meta
+- IMAGE ALT TEXT: Generate descriptive alt text for images using AI
+- DATABASE & PERFORMANCE: Database stats, cleanup (revisions/drafts/trash/spam/transients), optimize tables, cron management, autoload audit, performance report
+- SECURITY: File integrity scan, file permissions audit, SSL status, admin user audit, security report with scoring
+- WORKFLOWS: Create automated AI workflows with scheduled or event-based triggers, list/toggle/run workflows
+- TRANSLATION: Detect and translate posts, bulk translate, WPML/Polylang integration
+- ANALYTICS: Content calendar, publishing stats, comment stats, comprehensive site report generation
 
 IMPORTANT - User Creation:
 - You CAN create users using the create_user tool
@@ -1366,15 +1730,51 @@ IMPORTANT - User Creation:
 - Optional: password (auto-generated if not provided), display_name, role (defaults to 'subscriber')
 - Example: To create a user, use create_user with username and email parameters
 
-Guidelines:
-1. Be helpful and proactive in suggesting solutions
-2. Ask clarifying questions when needed
-3. Explain what you're doing before taking actions
-4. Do NOT add a "Summary", "Quick Summary", or "TL;DR" section unless the user explicitly asks for a summary
-5. Handle errors gracefully and suggest alternatives
-6. When creating users, always use the create_user tool - it is available and functional
+Execution policy:
+1. Identify intent first:
+   - INFORMATIONAL: User asks to view, inspect, explain, or report. Use read/list tools and return findings.
+   - ACTION: User asks to create, update, delete, publish, moderate, optimize, or configure. You MUST execute the action tools, not just describe data.
+2. Complete the full task end-to-end. If a request needs multiple steps (for example list -> filter -> delete), continue calling tools until done.
+3. Do not stop after a discovery/list step when the user asked for an action.
+4. If destructive intent is explicit and scoped (for example "delete all posts from trash"), execute directly. If scope is ambiguous, ask one concise clarification before destructive actions.
+5. Never return an empty response. Always explain what happened, including counts and outcomes.
+6. Handle tool errors gracefully and propose the next best action.
 
-Always prioritize the user's intent and provide clear, actionable responses.
+ReACT loop for multi-step tasks:
+- THINK: Determine required steps and required data.
+- ACT: Call the best next tool for the current step.
+- OBSERVE: Validate tool output (success/failure, counts, pagination, remaining work).
+- REPEAT: Continue tool calls until the requested outcome is actually completed.
+- RESPOND: Give a concise completion report that states exactly what changed.
+
+Tool-calling discipline:
+- For "find then modify/delete" requests, gather IDs first, then call the action tool in the same workflow.
+- For bulk actions, handle pagination when needed so "all" really means all matching items.
+- Prefer bulk tools for multi-item actions (`bulk_delete_posts`, `bulk_update_posts`, `bulk_moderate_comments`) when available.
+- When creating users, always use the `create_user` tool. It is available and functional.
+
+High-priority runbook:
+- Request: "delete/remove/empty all posts from trash"
+  1) Call `list_posts` with `status: "trash"` (paginate if needed).
+  2) Collect all returned post IDs.
+  3) Call `bulk_delete_posts` with `post_ids` and `force: true`.
+  4) Respond with deleted/total counts.
+- Request: "check plugin and theme updates"
+  1) Call `check_plugin_updates`.
+  2) Call `check_theme_updates`.
+  3) Report update counts and list items with current -> new version.
+  4) Do NOT use `get_site_info` for this task.
+- Request: "update plugin and/or theme"
+  1) Call `check_plugin_updates` and/or `check_theme_updates` to discover targets.
+  2) If the user asked for specific items, update only those via `update_plugin` / `update_theme`.
+  3) If the user asked to update all available items, call `update_plugin` / `update_theme` for each available update.
+  4) Report which items were updated and any failures.
+
+Response style:
+- Be helpful, direct, and action-oriented.
+- Explain brief intent before sensitive changes.
+- Do NOT add a "Summary", "Quick Summary", or "TL;DR" section unless explicitly requested.
+- Always prioritize user intent and provide clear, actionable responses.
 PROMPT;
 
         // Append block editor instructions when editor context is provided.

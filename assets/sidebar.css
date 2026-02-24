@@ -214,9 +214,9 @@ body:not(.wp-admin) #abw-sidebar-container {
    Sidebar Chat Overrides
    ========================================================================== */
 
-/* Header - refined gradient to match new design tokens */
+/* Header - WordPress admin dark bar */
 #abw-sidebar-container .abw-chat-header {
-	background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+	background: #1d2327;
 	color: white;
 	padding: 18px 20px;
 	border-bottom: none;

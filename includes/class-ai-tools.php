@@ -880,6 +880,1136 @@ class ABW_AI_Tools
     }
 
     /**
+     * Generate WooCommerce product description
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_product_description(array $input)
+    {
+        $product_name = $input['product_name'] ?? '';
+        $category = $input['category'] ?? '';
+        $attributes = $input['attributes'] ?? [];
+        $price = $input['price'] ?? '';
+        $tone = $input['tone'] ?? 'persuasive';
+
+        if (empty($product_name)) {
+            return new WP_Error('missing_product_name', __('Please provide a product name.', 'abw-ai'));
+        }
+
+        $attributes_text = '';
+        if (! empty($attributes)) {
+            $attributes_text = "Product attributes:\n";
+            foreach ($attributes as $key => $value) {
+                $attributes_text .= "- $key: $value\n";
+            }
+        }
+
+        $prompt = sprintf(
+            "Generate a product description for: %s\n\n%s%s%sTone: %s\n\nProvide:\n1. A full product description (HTML, 150-300 words)\n2. A short description (2-3 sentences, plain text)\n\nFormat as JSON with 'description' and 'short_description' fields.",
+            $product_name,
+            $category ? "Category: $category\n" : '',
+            $attributes_text,
+            $price ? "Price: $price\n" : '',
+            $tone
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an expert e-commerce copywriter. Generate compelling product descriptions that drive sales. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $result = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [
+                'description'       => $response['content'],
+                'short_description' => '',
+            ];
+        }
+
+        return [
+            'description'       => $result['description'] ?? '',
+            'short_description' => $result['short_description'] ?? '',
+        ];
+    }
+
+    /**
+     * Rewrite content in a specified tone
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function rewrite_for_tone(array $input)
+    {
+        $content = $input['content'] ?? '';
+        $tone = $input['tone'] ?? '';
+
+        if (empty($content)) {
+            return new WP_Error('missing_content', __('Please provide content to rewrite.', 'abw-ai'));
+        }
+
+        if (empty($tone)) {
+            return new WP_Error('missing_tone', __('Please specify a tone.', 'abw-ai'));
+        }
+
+        $valid_tones = ['professional', 'casual', 'persuasive', 'humorous', 'academic', 'friendly', 'authoritative'];
+        if (! in_array($tone, $valid_tones, true)) {
+            return new WP_Error('invalid_tone', sprintf(
+                __('Invalid tone. Choose from: %s', 'abw-ai'),
+                implode(', ', $valid_tones)
+            ));
+        }
+
+        $prompt = sprintf(
+            "Rewrite the following content in a %s tone. Preserve the original meaning and key information.\n\nContent:\n%s\n\nProvide the rewritten content in HTML format.",
+            $tone,
+            $content
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an expert writer skilled at adapting content to different tones and styles. Rewrite content while preserving its meaning. Output HTML only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return [
+            'rewritten_content' => $response['content'],
+            'tone_applied'      => $tone,
+        ];
+    }
+
+    /**
+     * Generate a structured content outline
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_outline(array $input)
+    {
+        $topic = $input['topic'] ?? '';
+        $depth = $input['depth'] ?? 'detailed';
+        $target_length = $input['target_length'] ?? '';
+
+        if (empty($topic)) {
+            return new WP_Error('missing_topic', __('Please provide a topic for the outline.', 'abw-ai'));
+        }
+
+        $prompt = sprintf(
+            "Generate a %s content outline for: %s\n%s\nProvide a structured outline with:\n- A suggested title\n- Sections with headings\n- Subpoints for each section\n- Brief notes on what to cover\n\nFormat as JSON with 'title' and 'sections' array. Each section has 'heading', 'subpoints' (array of strings), and 'notes' (string).",
+            $depth,
+            $topic,
+            $target_length ? "Target length: $target_length\n" : ''
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an expert content strategist. Generate well-structured outlines that serve as effective blueprints for content creation. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $outline = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [
+                'title'        => '',
+                'sections'     => [],
+                'raw_response' => $response['content'],
+            ];
+        }
+
+        return [
+            'title'    => $outline['title'] ?? '',
+            'sections' => $outline['sections'] ?? [],
+        ];
+    }
+
+    /**
+     * Expand an outline into full content
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function expand_from_outline(array $input)
+    {
+        $outline = $input['outline'] ?? '';
+        $style = $input['style'] ?? 'informative';
+        $length = $input['length'] ?? 'medium';
+
+        if (empty($outline)) {
+            return new WP_Error('missing_outline', __('Please provide an outline to expand.', 'abw-ai'));
+        }
+
+        $prompt = sprintf(
+            "Expand the following outline into full, well-written content.\n\nStyle: %s\nTarget length: %s\n\nOutline:\n%s\n\nWrite each section with proper HTML formatting (h2, h3, p tags). Make the content engaging, informative, and well-structured.",
+            $style,
+            $length,
+            $outline
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an expert content writer. Expand outlines into comprehensive, well-written content. Output HTML only, no markdown.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return [
+            'content'    => $response['content'],
+            'word_count' => str_word_count(strip_tags($response['content'])),
+        ];
+    }
+
+    /**
+     * Generate a compelling post excerpt using AI
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_excerpt_ai(array $input)
+    {
+        $content = $input['content'] ?? '';
+        $max_length = $input['max_length'] ?? 155;
+
+        if (empty($content)) {
+            return new WP_Error('missing_content', __('Please provide content to generate an excerpt from.', 'abw-ai'));
+        }
+
+        $prompt = sprintf(
+            "Generate a compelling excerpt/summary for the following content. The excerpt must be no longer than %d characters. It should be engaging and make readers want to read more.\n\nContent:\n%s\n\nProvide only the excerpt text, no explanations.",
+            $max_length,
+            substr(strip_tags($content), 0, 3000)
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an expert copywriter. Generate compelling, concise excerpts that capture the essence of content and entice readers. Output plain text only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $excerpt = trim($response['content']);
+        if (strlen($excerpt) > $max_length) {
+            $excerpt = substr($excerpt, 0, $max_length - 3) . '...';
+        }
+
+        return [
+            'excerpt'         => $excerpt,
+            'character_count' => strlen($excerpt),
+        ];
+    }
+
+    /**
+     * Generate a table of contents from HTML content
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_table_of_contents(array $input)
+    {
+        $content = $input['content'] ?? '';
+
+        if (empty($content)) {
+            return new WP_Error('missing_content', __('Please provide content to generate a table of contents from.', 'abw-ai'));
+        }
+
+        $toc = [];
+        if (preg_match_all('/<(h[2-4])[^>]*(?:id=["\']([^"\']*)["\'])?[^>]*>(.*?)<\/\1>/is', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $index => $match) {
+                $tag = strtolower($match[1]);
+                $level = (int) substr($tag, 1);
+                $text = strip_tags($match[3]);
+                $id = ! empty($match[2]) ? $match[2] : sanitize_title($text) . '-' . $index;
+
+                $toc[] = [
+                    'level' => $level,
+                    'text'  => $text,
+                    'id'    => $id,
+                ];
+            }
+        }
+
+        $html = '<nav class="table-of-contents"><ol>';
+        $current_level = 2;
+        foreach ($toc as $item) {
+            while ($item['level'] > $current_level) {
+                $html .= '<ol>';
+                $current_level++;
+            }
+            while ($item['level'] < $current_level) {
+                $html .= '</ol>';
+                $current_level--;
+            }
+            $html .= sprintf('<li><a href="#%s">%s</a></li>', esc_attr($item['id']), esc_html($item['text']));
+        }
+        while ($current_level > 2) {
+            $html .= '</ol>';
+            $current_level--;
+        }
+        $html .= '</ol></nav>';
+
+        return [
+            'toc'  => $toc,
+            'html' => $html,
+        ];
+    }
+
+    // =========================================================================
+    // i18n / Translation Tools
+    // =========================================================================
+
+    /**
+     * Detect source language and translate a post's title, content, and excerpt
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function detect_and_translate_post(array $input)
+    {
+        $post_id = $input['post_id'] ?? 0;
+        $target_language = $input['target_language'] ?? '';
+
+        if (empty($post_id)) {
+            return new WP_Error('missing_post_id', __('Please provide a post ID.', 'abw-ai'));
+        }
+        if (empty($target_language)) {
+            return new WP_Error('missing_target_language', __('Please provide a target language.', 'abw-ai'));
+        }
+
+        $post = get_post((int) $post_id);
+        if (! $post) {
+            return new WP_Error('invalid_post', __('Post not found.', 'abw-ai'));
+        }
+
+        $title   = $post->post_title;
+        $content = $post->post_content;
+        $excerpt = $post->post_excerpt;
+
+        $prompt = sprintf(
+            "You are given a WordPress post. First detect the source language, then translate all three fields to %s.\n\nTitle: %s\n\nContent:\n%s\n\nExcerpt:\n%s\n\nRespond with valid JSON only:\n{\"source_language\": \"...\", \"translated_title\": \"...\", \"translated_content\": \"...\", \"translated_excerpt\": \"...\"}",
+            $target_language,
+            $title,
+            $content,
+            $excerpt ?: '(empty)'
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are a professional translator. Detect the source language and translate accurately while preserving HTML formatting. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $result = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return new WP_Error('parse_error', __('Failed to parse translation response.', 'abw-ai'));
+        }
+
+        return [
+            'source_language'    => $result['source_language'] ?? 'unknown',
+            'target_language'    => $target_language,
+            'translated_title'   => $result['translated_title'] ?? '',
+            'translated_content' => $result['translated_content'] ?? '',
+            'translated_excerpt' => $result['translated_excerpt'] ?? '',
+        ];
+    }
+
+    /**
+     * Bulk translate multiple posts
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function bulk_translate_posts(array $input)
+    {
+        $post_ids = $input['post_ids'] ?? [];
+        $target_language = $input['target_language'] ?? '';
+        $create_new = $input['create_new'] ?? false;
+
+        if (empty($post_ids) || ! is_array($post_ids)) {
+            return new WP_Error('missing_post_ids', __('Please provide an array of post IDs.', 'abw-ai'));
+        }
+        if (empty($target_language)) {
+            return new WP_Error('missing_target_language', __('Please provide a target language.', 'abw-ai'));
+        }
+
+        $results = [];
+        $translated = 0;
+
+        foreach ($post_ids as $post_id) {
+            $translation = self::detect_and_translate_post([
+                'post_id'         => (int) $post_id,
+                'target_language' => $target_language,
+            ]);
+
+            if (is_wp_error($translation)) {
+                $results[] = [
+                    'post_id' => $post_id,
+                    'success' => false,
+                    'error'   => $translation->get_error_message(),
+                ];
+                continue;
+            }
+
+            $entry = [
+                'post_id'          => $post_id,
+                'success'          => true,
+                'translated_title' => $translation['translated_title'],
+            ];
+
+            if ($create_new) {
+                $new_post_id = wp_insert_post([
+                    'post_title'   => $translation['translated_title'] . ' [' . $target_language . ']',
+                    'post_content' => $translation['translated_content'],
+                    'post_excerpt' => $translation['translated_excerpt'],
+                    'post_status'  => 'draft',
+                    'post_type'    => get_post_type($post_id),
+                ]);
+
+                if (is_wp_error($new_post_id)) {
+                    $entry['new_post_id'] = null;
+                    $entry['create_error'] = $new_post_id->get_error_message();
+                } else {
+                    update_post_meta($new_post_id, '_abw_translated_from', (int) $post_id);
+                    update_post_meta($new_post_id, '_abw_translation_language', $target_language);
+                    $entry['new_post_id'] = $new_post_id;
+                }
+            }
+
+            $results[] = $entry;
+            $translated++;
+        }
+
+        return [
+            'translated' => $translated,
+            'total'      => count($post_ids),
+            'results'    => $results,
+        ];
+    }
+
+    /**
+     * Manage translations via WPML or Polylang
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function manage_translations(array $input)
+    {
+        $action  = $input['action'] ?? 'status';
+        $post_id = $input['post_id'] ?? 0;
+
+        if (empty($post_id)) {
+            return new WP_Error('missing_post_id', __('Please provide a post ID.', 'abw-ai'));
+        }
+
+        $post = get_post((int) $post_id);
+        if (! $post) {
+            return new WP_Error('invalid_post', __('Post not found.', 'abw-ai'));
+        }
+
+        // Detect translation plugin
+        $plugin = 'none';
+        if (defined('ICL_SITEPRESS_VERSION')) {
+            $plugin = 'wpml';
+        } elseif (function_exists('pll_get_post_translations')) {
+            $plugin = 'polylang';
+        }
+
+        $translations = [];
+
+        if ($action === 'status') {
+            if ($plugin === 'wpml' && function_exists('wpml_get_language_information')) {
+                $lang_info = wpml_get_language_information(null, $post_id);
+                $trid = apply_filters('wpml_element_trid', null, $post_id, 'post_' . $post->post_type);
+                $all_translations = apply_filters('wpml_get_element_translations', null, $trid, 'post_' . $post->post_type);
+
+                if (is_array($all_translations)) {
+                    foreach ($all_translations as $lang => $t) {
+                        $translations[$lang] = [
+                            'post_id' => $t->element_id ?? null,
+                            'status'  => isset($t->element_id) ? get_post_status($t->element_id) : 'not_translated',
+                        ];
+                    }
+                }
+            } elseif ($plugin === 'polylang') {
+                $post_translations = pll_get_post_translations($post_id);
+                foreach ($post_translations as $lang => $tid) {
+                    $translations[$lang] = [
+                        'post_id' => $tid,
+                        'status'  => get_post_status($tid),
+                    ];
+                }
+            }
+        } elseif ($action === 'sync') {
+            if ($plugin === 'wpml') {
+                do_action('wpml_make_post_duplicates', $post_id);
+                $translations['sync'] = 'triggered';
+            } elseif ($plugin === 'polylang') {
+                $translations['sync'] = 'polylang_does_not_support_auto_sync';
+            } else {
+                return new WP_Error('no_translation_plugin', __('No translation plugin (WPML or Polylang) detected.', 'abw-ai'));
+            }
+        } else {
+            return new WP_Error('invalid_action', __('Action must be "status" or "sync".', 'abw-ai'));
+        }
+
+        return [
+            'plugin'       => $plugin,
+            'post_id'      => $post_id,
+            'action'       => $action,
+            'translations' => $translations,
+        ];
+    }
+
+    // =========================================================================
+    // Analytics & Reporting Tools
+    // =========================================================================
+
+    /**
+     * Get content calendar (scheduled posts)
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function get_content_calendar(array $input)
+    {
+        $days_ahead = max(1, (int) ($input['days_ahead'] ?? 30));
+
+        $posts = get_posts([
+            'post_status'    => 'future',
+            'post_type'      => 'any',
+            'posts_per_page' => 100,
+            'orderby'        => 'date',
+            'order'          => 'ASC',
+            'date_query'     => [
+                [
+                    'after'     => 'now',
+                    'before'    => gmdate('Y-m-d', strtotime("+{$days_ahead} days")),
+                    'inclusive' => true,
+                ],
+            ],
+        ]);
+
+        $calendar = [];
+        foreach ($posts as $post) {
+            $categories = wp_get_post_categories($post->ID, ['fields' => 'names']);
+            $author = get_the_author_meta('display_name', $post->post_author);
+
+            $calendar[] = [
+                'id'             => $post->ID,
+                'title'          => $post->post_title,
+                'scheduled_date' => $post->post_date,
+                'author'         => $author,
+                'post_type'      => $post->post_type,
+                'categories'     => $categories,
+            ];
+        }
+
+        return [
+            'days_ahead' => $days_ahead,
+            'total'      => count($calendar),
+            'posts'      => $calendar,
+        ];
+    }
+
+    /**
+     * Get publishing statistics for a period
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function get_publishing_stats(array $input)
+    {
+        $period = $input['period'] ?? 'month';
+
+        $date_map = [
+            'week'  => '-7 days',
+            'month' => '-30 days',
+            'year'  => '-365 days',
+        ];
+        $after = $date_map[$period] ?? $date_map['month'];
+
+        $posts = get_posts([
+            'post_status'    => 'publish',
+            'post_type'      => 'any',
+            'posts_per_page' => -1,
+            'date_query'     => [
+                ['after' => $after, 'inclusive' => true],
+            ],
+        ]);
+
+        $by_date   = [];
+        $by_author = [];
+        $by_type   = [];
+
+        foreach ($posts as $post) {
+            $date = gmdate('Y-m-d', strtotime($post->post_date));
+            $author = get_the_author_meta('display_name', $post->post_author);
+            $type = $post->post_type;
+
+            $by_date[$date]     = ($by_date[$date] ?? 0) + 1;
+            $by_author[$author] = ($by_author[$author] ?? 0) + 1;
+            $by_type[$type]     = ($by_type[$type] ?? 0) + 1;
+        }
+
+        ksort($by_date);
+        arsort($by_author);
+        arsort($by_type);
+
+        return [
+            'total_published' => count($posts),
+            'by_date'         => $by_date,
+            'by_author'       => $by_author,
+            'by_type'         => $by_type,
+            'period'          => $period,
+        ];
+    }
+
+    /**
+     * Get comment statistics for a period
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function get_comment_stats(array $input)
+    {
+        $period = $input['period'] ?? 'month';
+
+        $date_map = [
+            'week'  => '-7 days',
+            'month' => '-30 days',
+            'year'  => '-365 days',
+        ];
+        $after = $date_map[$period] ?? $date_map['month'];
+        $after_date = gmdate('Y-m-d H:i:s', strtotime($after));
+
+        global $wpdb;
+
+        $counts = $wpdb->get_results($wpdb->prepare(
+            "SELECT comment_approved, COUNT(*) as cnt
+             FROM {$wpdb->comments}
+             WHERE comment_date_gmt >= %s
+             GROUP BY comment_approved",
+            $after_date
+        ));
+
+        $status_map = [
+            '1'     => 'approved',
+            '0'     => 'pending',
+            'spam'  => 'spam',
+            'trash' => 'trash',
+        ];
+
+        $stats = ['approved' => 0, 'pending' => 0, 'spam' => 0, 'trash' => 0];
+        $total = 0;
+        foreach ($counts as $row) {
+            $key = $status_map[$row->comment_approved] ?? 'other';
+            if (isset($stats[$key])) {
+                $stats[$key] = (int) $row->cnt;
+            }
+            $total += (int) $row->cnt;
+        }
+
+        $top_commenters = $wpdb->get_results($wpdb->prepare(
+            "SELECT comment_author, comment_author_email, COUNT(*) as cnt
+             FROM {$wpdb->comments}
+             WHERE comment_approved = '1' AND comment_date_gmt >= %s
+             GROUP BY comment_author_email
+             ORDER BY cnt DESC
+             LIMIT 10",
+            $after_date
+        ));
+
+        $commenters = [];
+        foreach ($top_commenters as $c) {
+            $commenters[] = [
+                'name'  => $c->comment_author,
+                'email' => $c->comment_author_email,
+                'count' => (int) $c->cnt,
+            ];
+        }
+
+        return [
+            'total'          => $total,
+            'approved'       => $stats['approved'],
+            'pending'        => $stats['pending'],
+            'spam'           => $stats['spam'],
+            'top_commenters' => $commenters,
+            'period'         => $period,
+        ];
+    }
+
+    /**
+     * Generate a comprehensive site report
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_site_report(array $input)
+    {
+        $sections = $input['sections'] ?? ['content', 'seo', 'performance', 'security'];
+        $raw = [];
+
+        // Content section
+        if (in_array('content', $sections, true)) {
+            $post_types = get_post_types(['public' => true], 'names');
+            $content_stats = [];
+            foreach ($post_types as $pt) {
+                $counts = wp_count_posts($pt);
+                $content_stats[$pt] = [
+                    'publish' => (int) ($counts->publish ?? 0),
+                    'draft'   => (int) ($counts->draft ?? 0),
+                    'pending' => (int) ($counts->pending ?? 0),
+                    'future'  => (int) ($counts->future ?? 0),
+                    'trash'   => (int) ($counts->trash ?? 0),
+                ];
+            }
+
+            $recent = get_posts([
+                'post_status'    => 'publish',
+                'posts_per_page' => 5,
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+            ]);
+            $recent_list = [];
+            foreach ($recent as $p) {
+                $recent_list[] = [
+                    'id'    => $p->ID,
+                    'title' => $p->post_title,
+                    'date'  => $p->post_date,
+                ];
+            }
+
+            $comment_counts = wp_count_comments();
+
+            $raw['content'] = [
+                'post_counts'    => $content_stats,
+                'recent_posts'   => $recent_list,
+                'comment_counts' => [
+                    'total'    => (int) $comment_counts->total_comments,
+                    'approved' => (int) $comment_counts->approved,
+                    'pending'  => (int) $comment_counts->moderated,
+                    'spam'     => (int) $comment_counts->spam,
+                ],
+            ];
+        }
+
+        // Performance section
+        if (in_array('performance', $sections, true)) {
+            if (is_callable(['ABW_Abilities_Registration', 'execute_get_performance_report'])) {
+                $perf = ABW_Abilities_Registration::execute_get_performance_report([]);
+                $raw['performance'] = is_wp_error($perf) ? ['error' => $perf->get_error_message()] : $perf;
+            } else {
+                $raw['performance'] = ['note' => 'Performance report not available.'];
+            }
+        }
+
+        // Security section
+        if (in_array('security', $sections, true)) {
+            if (is_callable(['ABW_Security_Tools', 'get_security_report'])) {
+                $sec = ABW_Security_Tools::get_security_report([]);
+                $raw['security'] = is_wp_error($sec) ? ['error' => $sec->get_error_message()] : $sec;
+            } else {
+                $raw['security'] = ['note' => 'Security report not available.'];
+            }
+        }
+
+        // SEO section (basic on-site checks)
+        if (in_array('seo', $sections, true)) {
+            $raw['seo'] = [
+                'site_title'   => get_bloginfo('name'),
+                'tagline'      => get_bloginfo('description'),
+                'permalink'    => get_option('permalink_structure') ?: 'plain',
+                'search_visibility' => get_option('blog_public') ? 'visible' : 'discouraged',
+            ];
+        }
+
+        // Summarise with AI
+        $prompt = sprintf(
+            "Summarise the following WordPress site report data into a clear, readable report with sections and key findings.\n\n%s",
+            wp_json_encode($raw, JSON_PRETTY_PRINT)
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are a WordPress site analyst. Produce a concise, well-structured site report highlighting key findings, potential issues, and recommendations.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $ai_response = ABW_AI_Router::chat($messages);
+        $report_text = is_wp_error($ai_response) ? 'AI summary unavailable.' : ($ai_response['content'] ?? '');
+
+        return [
+            'report'       => $report_text,
+            'sections'     => $raw,
+            'generated_at' => gmdate('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * Analyze content for SEO score
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function analyze_seo_score(array $input)
+    {
+        $content = $input['content'] ?? '';
+        $title = $input['title'] ?? '';
+        $focus_keyword = $input['focus_keyword'] ?? '';
+        $url = $input['url'] ?? '';
+
+        if (empty($content)) {
+            return new WP_Error('missing_content', __('Please provide content to analyze.', 'abw-ai'));
+        }
+
+        $prompt = sprintf(
+            "Perform a comprehensive SEO analysis of the following content.\n\n%s%s%sContent:\n%s\n\nAnalyze and provide:\n1. Overall SEO score (0-100)\n2. Grade (A+, A, B, C, D, F)\n3. Issues found (array of strings)\n4. Suggestions for improvement (array of strings)\n5. Keyword density (percentage if focus keyword provided)\n6. Readability score (0-100)\n\nFormat as JSON with fields: score, grade, issues, suggestions, keyword_density, readability_score.",
+            $title ? "Title: $title\n" : '',
+            $focus_keyword ? "Focus keyword: $focus_keyword\n" : '',
+            $url ? "URL: $url\n" : '',
+            substr(strip_tags($content), 0, 3000)
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an SEO analysis expert. Provide thorough, actionable SEO audits with specific scores and recommendations. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $analysis = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [
+                'score'             => 0,
+                'grade'             => 'N/A',
+                'issues'            => [],
+                'suggestions'       => [],
+                'keyword_density'   => 0,
+                'readability_score' => 0,
+                'raw_response'      => $response['content'],
+            ];
+        }
+
+        return [
+            'score'             => $analysis['score'] ?? 0,
+            'grade'             => $analysis['grade'] ?? 'N/A',
+            'issues'            => $analysis['issues'] ?? [],
+            'suggestions'       => $analysis['suggestions'] ?? [],
+            'keyword_density'   => $analysis['keyword_density'] ?? 0,
+            'readability_score' => $analysis['readability_score'] ?? 0,
+        ];
+    }
+
+    /**
+     * Suggest internal links for a post
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function suggest_internal_links(array $input)
+    {
+        $post_id = $input['post_id'] ?? 0;
+
+        if (empty($post_id)) {
+            return new WP_Error('missing_post_id', __('Please provide a post ID.', 'abw-ai'));
+        }
+
+        $post = get_post($post_id);
+        if (! $post) {
+            return new WP_Error('invalid_post', __('Post not found.', 'abw-ai'));
+        }
+
+        $related_posts = get_posts([
+            'post_type'      => $post->post_type,
+            'post_status'    => 'publish',
+            'posts_per_page' => 20,
+            'exclude'        => [$post_id],
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ]);
+
+        if (empty($related_posts)) {
+            return [
+                'suggestions' => [],
+            ];
+        }
+
+        $posts_context = [];
+        foreach ($related_posts as $rp) {
+            $posts_context[] = [
+                'id'    => $rp->ID,
+                'title' => $rp->post_title,
+                'url'   => get_permalink($rp->ID),
+                'excerpt' => wp_trim_words(strip_tags($rp->post_content), 30),
+            ];
+        }
+
+        $prompt = sprintf(
+            "Analyze the following post content and suggest where internal links to other posts should be added.\n\nCurrent post content:\n%s\n\nAvailable posts to link to:\n%s\n\nFor each suggestion provide:\n- anchor_text: the text in the current post to link\n- target_post_id: the ID of the post to link to\n- target_title: the title of the target post\n- target_url: the URL of the target post\n- context: brief explanation of why this link is relevant\n\nFormat as JSON array of suggestions.",
+            substr(strip_tags($post->post_content), 0, 3000),
+            wp_json_encode($posts_context)
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an SEO and internal linking expert. Suggest relevant, natural internal links that improve site structure and user navigation. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $suggestions = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [
+                'suggestions'  => [],
+                'raw_response' => $response['content'],
+            ];
+        }
+
+        return [
+            'suggestions' => is_array($suggestions) ? $suggestions : [],
+        ];
+    }
+
+    /**
+     * Generate an SEO-optimized URL slug
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function generate_slug(array $input)
+    {
+        $title = $input['title'] ?? '';
+        $focus_keyword = $input['focus_keyword'] ?? '';
+
+        if (empty($title)) {
+            return new WP_Error('missing_title', __('Please provide a title.', 'abw-ai'));
+        }
+
+        $prompt = sprintf(
+            "Generate an SEO-optimized URL slug for the following title.\n\nTitle: %s\n%s\nRules:\n- Use lowercase letters, numbers, and hyphens only\n- Keep it concise (3-6 words ideal)\n- Include the focus keyword if provided\n- Remove stop words when possible\n\nProvide:\n1. Best slug option\n2. Three alternative options\n\nFormat as JSON with 'slug' (string) and 'alternatives' (array of 3 strings).",
+            $title,
+            $focus_keyword ? "Focus keyword: $focus_keyword\n" : ''
+        );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are an SEO expert specializing in URL optimization. Generate clean, keyword-rich slugs. Output valid JSON only.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $result = json_decode($response['content'], true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $fallback = sanitize_title($title);
+            return [
+                'slug'         => $fallback,
+                'alternatives' => [],
+            ];
+        }
+
+        $slug = sanitize_title($result['slug'] ?? $title);
+        $alternatives = [];
+        if (! empty($result['alternatives']) && is_array($result['alternatives'])) {
+            foreach ($result['alternatives'] as $alt) {
+                $alternatives[] = sanitize_title($alt);
+            }
+        }
+
+        return [
+            'slug'         => $slug,
+            'alternatives' => $alternatives,
+        ];
+    }
+
+    /**
+     * Check for broken links in a post or URL
+     *
+     * @param array $input Input parameters
+     * @return array|WP_Error
+     */
+    public static function check_broken_links(array $input)
+    {
+        $post_id = $input['post_id'] ?? 0;
+        $url = $input['url'] ?? '';
+
+        if (empty($post_id) && empty($url)) {
+            return new WP_Error('missing_input', __('Please provide a post ID or URL.', 'abw-ai'));
+        }
+
+        $content = '';
+        if (! empty($post_id)) {
+            $post = get_post($post_id);
+            if (! $post) {
+                return new WP_Error('invalid_post', __('Post not found.', 'abw-ai'));
+            }
+            $content = $post->post_content;
+        } elseif (! empty($url)) {
+            $page_response = wp_remote_get($url, ['timeout' => 10]);
+            if (is_wp_error($page_response)) {
+                return new WP_Error('fetch_failed', __('Could not fetch the URL.', 'abw-ai'));
+            }
+            $content = wp_remote_retrieve_body($page_response);
+        }
+
+        $links = [];
+        if (preg_match_all('/<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)<\/a>/is', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $href = $match[1];
+                if (strpos($href, '#') === 0 || strpos($href, 'mailto:') === 0 || strpos($href, 'tel:') === 0) {
+                    continue;
+                }
+                $links[] = [
+                    'url'     => $href,
+                    'context' => strip_tags($match[2]),
+                ];
+            }
+        }
+
+        if (empty($links)) {
+            return [
+                'total_links'  => 0,
+                'broken_links' => [],
+            ];
+        }
+
+        $broken = [];
+        foreach ($links as $link) {
+            $check = wp_remote_head($link['url'], [
+                'timeout'     => 5,
+                'redirection' => 3,
+                'sslverify'   => false,
+            ]);
+
+            if (is_wp_error($check)) {
+                $broken[] = [
+                    'url'         => $link['url'],
+                    'status_code' => 0,
+                    'context'     => $link['context'],
+                ];
+                continue;
+            }
+
+            $status = wp_remote_retrieve_response_code($check);
+            if ($status >= 400) {
+                $broken[] = [
+                    'url'         => $link['url'],
+                    'status_code' => $status,
+                    'context'     => $link['context'],
+                ];
+            }
+        }
+
+        return [
+            'total_links'  => count($links),
+            'broken_links' => $broken,
+        ];
+    }
+
+    /**
      * Extract title from HTML content
      *
      * @param string $content HTML content
@@ -1090,6 +2220,209 @@ class ABW_AI_Tools
                     'required'   => ['content'],
                     'properties' => [
                         'content' => ['type' => 'string', 'description' => 'Content to check'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_product_description',
+                'description' => 'Generate a WooCommerce product description',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['product_name'],
+                    'properties' => [
+                        'product_name' => ['type' => 'string', 'description' => 'Name of the product'],
+                        'category'     => ['type' => 'string', 'description' => 'Product category'],
+                        'attributes'   => ['type' => 'object', 'description' => 'Product attributes as key-value pairs'],
+                        'price'        => ['type' => 'string', 'description' => 'Product price'],
+                        'tone'         => ['type' => 'string', 'enum' => ['persuasive', 'professional', 'casual', 'luxury', 'friendly'], 'default' => 'persuasive'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'rewrite_for_tone',
+                'description' => 'Rewrite content in a specified tone',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['content', 'tone'],
+                    'properties' => [
+                        'content' => ['type' => 'string', 'description' => 'Content to rewrite'],
+                        'tone'    => ['type' => 'string', 'enum' => ['professional', 'casual', 'persuasive', 'humorous', 'academic', 'friendly', 'authoritative'], 'description' => 'Target tone'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_outline',
+                'description' => 'Generate a structured content outline',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['topic'],
+                    'properties' => [
+                        'topic'         => ['type' => 'string', 'description' => 'Topic for the outline'],
+                        'depth'         => ['type' => 'string', 'enum' => ['basic', 'detailed'], 'default' => 'detailed'],
+                        'target_length' => ['type' => 'string', 'description' => 'Target content length (e.g. 1000 words)'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'expand_from_outline',
+                'description' => 'Expand an outline into full content',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['outline'],
+                    'properties' => [
+                        'outline' => ['type' => 'string', 'description' => 'The outline text to expand'],
+                        'style'   => ['type' => 'string', 'description' => 'Writing style'],
+                        'length'  => ['type' => 'string', 'description' => 'Target length (short, medium, long)'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_excerpt_ai',
+                'description' => 'Generate a compelling post excerpt using AI',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['content'],
+                    'properties' => [
+                        'content'    => ['type' => 'string', 'description' => 'Content to generate excerpt from'],
+                        'max_length' => ['type' => 'integer', 'description' => 'Maximum excerpt length in characters', 'default' => 155],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_table_of_contents',
+                'description' => 'Generate a table of contents from HTML content',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['content'],
+                    'properties' => [
+                        'content' => ['type' => 'string', 'description' => 'HTML content to extract headings from'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'analyze_seo_score',
+                'description' => 'Analyze content for SEO score and recommendations',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['content'],
+                    'properties' => [
+                        'content'       => ['type' => 'string', 'description' => 'Content to analyze'],
+                        'title'         => ['type' => 'string', 'description' => 'Page/post title'],
+                        'focus_keyword' => ['type' => 'string', 'description' => 'Target keyword'],
+                        'url'           => ['type' => 'string', 'description' => 'Page URL'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'suggest_internal_links',
+                'description' => 'Suggest internal links for a post',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['post_id'],
+                    'properties' => [
+                        'post_id' => ['type' => 'integer', 'description' => 'WordPress post ID'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_slug',
+                'description' => 'Generate an SEO-optimized URL slug',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['title'],
+                    'properties' => [
+                        'title'         => ['type' => 'string', 'description' => 'Post/page title'],
+                        'focus_keyword' => ['type' => 'string', 'description' => 'Focus keyword to include'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'check_broken_links',
+                'description' => 'Check for broken links in a post or URL',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'post_id' => ['type' => 'integer', 'description' => 'WordPress post ID to check'],
+                        'url'     => ['type' => 'string', 'description' => 'URL to check for broken links'],
+                    ],
+                ],
+            ],
+            // i18n Tools
+            [
+                'name'        => 'detect_and_translate_post',
+                'description' => 'Detect the source language of a post and translate its title, content, and excerpt to a target language',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['post_id', 'target_language'],
+                    'properties' => [
+                        'post_id'         => ['type' => 'integer', 'description' => 'WordPress post ID'],
+                        'target_language' => ['type' => 'string', 'description' => 'Target language (e.g. Spanish, French, Japanese)'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'bulk_translate_posts',
+                'description' => 'Translate multiple posts to a target language, optionally creating new draft posts with the translations',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['post_ids', 'target_language'],
+                    'properties' => [
+                        'post_ids'        => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Array of post IDs to translate'],
+                        'target_language' => ['type' => 'string', 'description' => 'Target language'],
+                        'create_new'      => ['type' => 'boolean', 'description' => 'Create new draft posts with translated content', 'default' => false],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'manage_translations',
+                'description' => 'Check translation status or trigger sync for a post via WPML or Polylang',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'required'   => ['post_id'],
+                    'properties' => [
+                        'action'  => ['type' => 'string', 'enum' => ['status', 'sync'], 'description' => 'Action to perform', 'default' => 'status'],
+                        'post_id' => ['type' => 'integer', 'description' => 'WordPress post ID'],
+                    ],
+                ],
+            ],
+            // Analytics & Reporting Tools
+            [
+                'name'        => 'get_content_calendar',
+                'description' => 'Get a content calendar showing all scheduled (future) posts',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'days_ahead' => ['type' => 'integer', 'description' => 'Number of days ahead to look', 'default' => 30],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'get_publishing_stats',
+                'description' => 'Get publishing statistics grouped by date, author, and post type for a given period',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'period' => ['type' => 'string', 'enum' => ['week', 'month', 'year'], 'description' => 'Time period', 'default' => 'month'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'get_comment_stats',
+                'description' => 'Get comment statistics including counts by status and top commenters',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'period' => ['type' => 'string', 'enum' => ['week', 'month', 'year'], 'description' => 'Time period', 'default' => 'month'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'generate_site_report',
+                'description' => 'Generate a comprehensive site report covering content, SEO, performance, and security with an AI summary',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'sections' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Sections to include: content, seo, performance, security. Defaults to all.'],
                     ],
                 ],
             ],

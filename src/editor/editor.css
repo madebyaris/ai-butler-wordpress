@@ -9,9 +9,9 @@
    Design Tokens
    ============================================================ */
 :root {
-	--abw-editor-primary: #6366f1;
-	--abw-editor-primary-dark: #4f46e5;
-	--abw-editor-primary-light: #818cf8;
+	--abw-editor-primary: #0073aa;
+	--abw-editor-primary-dark: #006799;
+	--abw-editor-primary-light: #2ea2cc;
 	--abw-editor-bg: #f8fafc;
 	--abw-editor-surface: #ffffff;
 	--abw-editor-text: #1e293b;
@@ -45,7 +45,7 @@
 	align-items: center;
 	justify-content: space-between;
 	padding: 12px 16px;
-	background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+	background: #1d2327;
 	color: #ffffff;
 	flex-shrink: 0;
 }
@@ -179,7 +179,7 @@
 }
 
 .abw-editor-sidebar .abw-message-user .abw-message-avatar {
-	background: linear-gradient(135deg, var(--abw-editor-primary), var(--abw-editor-primary-dark));
+	background: var(--abw-editor-primary);
 	color: #ffffff;
 	font-size: 12px;
 	font-weight: 600;
@@ -198,7 +198,7 @@
 }
 
 .abw-editor-sidebar .abw-message-user .abw-message-content {
-	background: linear-gradient(135deg, var(--abw-editor-primary), var(--abw-editor-primary-dark));
+	background: var(--abw-editor-primary);
 	color: #ffffff;
 	padding: 8px 12px;
 	border-radius: var(--abw-editor-radius-sm);
@@ -242,7 +242,7 @@
 }
 
 .abw-editor-sidebar .abw-message-content code {
-	background: rgba(99, 102, 241, 0.08);
+	background: rgba(0, 115, 170, 0.08);
 	padding: 1px 4px;
 	border-radius: 3px;
 	font-size: 12px;
@@ -340,6 +340,42 @@
 }
 
 /* ============================================================
+   Agentic Steps (ReACT Loop)
+   ============================================================ */
+.abw-editor-sidebar .abw-agent-step {
+	font-size: 12px;
+	padding: 6px 8px;
+	margin: 4px 0;
+	border-radius: var(--abw-editor-radius-sm);
+	line-height: 1.4;
+}
+
+.abw-editor-sidebar .abw-agent-step-progress {
+	color: var(--abw-editor-text-secondary);
+	font-style: italic;
+}
+
+.abw-editor-sidebar .abw-agent-step-thinking {
+	background: rgba(0, 115, 170, 0.06);
+	color: var(--abw-editor-text-secondary);
+	border-left: 3px solid var(--abw-editor-primary);
+	padding-left: 10px;
+}
+
+.abw-editor-sidebar .abw-agent-step-tool {
+	background: rgba(245, 158, 11, 0.08);
+	color: #92400e;
+	font-family: monospace;
+	font-size: 11px;
+}
+
+.abw-editor-sidebar .abw-agent-step-result {
+	background: rgba(16, 185, 129, 0.08);
+	color: #047857;
+	font-size: 11px;
+}
+
+/* ============================================================
    Block Action Status
    ============================================================ */
 .abw-block-action-status {
@@ -356,7 +392,7 @@
 }
 
 .abw-action-indicator.abw-action-executing {
-	background: rgba(99, 102, 241, 0.08);
+	background: rgba(0, 115, 170, 0.08);
 	color: var(--abw-editor-primary);
 }
 
@@ -465,7 +501,7 @@
 
 .abw-editor-sidebar .abw-chat-input:focus {
 	border-color: var(--abw-editor-primary);
-	box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+	box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.15);
 }
 
 .abw-editor-sidebar .abw-chat-input::placeholder {

@@ -8,12 +8,15 @@
  * @package ABW_AI
  */
 
-import { useState, useCallback, useEffect } from '@wordpress/element';
+import { useState, useCallback, useEffect, useRef } from '@wordpress/element';
 import { ChatMessages } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { BlockActionsFeedback } from './BlockActionsFeedback';
 import { useEditorContext } from '../hooks/useEditorContext';
 import { useBlockActions } from '../hooks/useBlockActions';
+
+const AGENT_POLL_INTERVAL_MS = 2000;
+const AGENT_POLL_MAX_MS = 60000;
 
 /**
  * ABW AI Sidebar content component.
@@ -24,7 +27,9 @@ export function Sidebar() {
 	const [ messages, setMessages ] = useState( [] );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ showFeedback, setShowFeedback ] = useState( false );
+	const [ agentSteps, setAgentSteps ] = useState( [] );
 
+	const pollRef = useRef( { interval: null, timeout: null, inFlight: false, completed: false } );
 	const { editorContext, isReady } = useEditorContext();
 	const { executeActions, isExecuting, actionStatus, lastResults } = useBlockActions();
 
@@ -32,6 +37,9 @@ export function Sidebar() {
 	useEffect( () => {
 		loadHistory();
 	}, [] );
+
+	// Stop polling on unmount.
+	useEffect( () => () => stopAgentPolling(), [ stopAgentPolling ] );
 
 	// Show feedback briefly after actions complete.
 	useEffect( () => {
@@ -69,6 +77,111 @@ export function Sidebar() {
 	}, [] );
 
 	/**
+	 * Stop agentic polling.
+	 */
+	const stopAgentPolling = useCallback( () => {
+		if ( pollRef.current.interval ) {
+			clearInterval( pollRef.current.interval );
+			pollRef.current.interval = null;
+		}
+		if ( pollRef.current.timeout ) {
+			clearTimeout( pollRef.current.timeout );
+			pollRef.current.timeout = null;
+		}
+	}, [] );
+
+	/**
+	 * Start agentic polling for session updates.
+	 *
+	 * @param {string} sessionId Session ID from backend.
+	 */
+	const startAgentPolling = useCallback( ( sessionId ) => {
+		stopAgentPolling();
+		pollRef.current.completed = false;
+		pollRef.current.timeout = setTimeout( () => {
+			stopAgentPolling();
+			setIsLoading( false );
+			setAgentSteps( [] );
+			setMessages( ( prev ) => [
+				...prev,
+				{ role: 'assistant', content: 'Request timed out. Please try again.' },
+			] );
+		}, AGENT_POLL_MAX_MS );
+
+		const poll = async () => {
+			if ( pollRef.current.inFlight ) return;
+			pollRef.current.inFlight = true;
+
+			try {
+				const res = await sendAjax( {
+					action: 'abw_agent_poll',
+					nonce: window.abwEditorChat.nonce,
+					session_id: sessionId,
+				} );
+
+				pollRef.current.inFlight = false;
+
+				if ( ! res.success ) {
+					stopAgentPolling();
+					setIsLoading( false );
+					setAgentSteps( [] );
+					setMessages( ( prev ) => [
+						...prev,
+						{ role: 'assistant', content: res.data?.message || 'An error occurred.' },
+					] );
+					return;
+				}
+
+				setAgentSteps( res.data.steps || [] );
+
+				if ( res.data.status === 'done' ) {
+					if ( pollRef.current.completed ) return;
+					pollRef.current.completed = true;
+					stopAgentPolling();
+					setIsLoading( false );
+					setAgentSteps( [] );
+
+					if ( res.data.block_actions && res.data.block_actions.length > 0 ) {
+						await executeActions( res.data.block_actions );
+					}
+
+					let content = res.data.response || '';
+					if ( ! content || ! String( content ).trim() ) {
+						content = 'Task completed.';
+					}
+					setMessages( ( prev ) => [
+						...prev,
+						{ role: 'assistant', content },
+					] );
+					return;
+				}
+
+				if ( res.data.status === 'error' ) {
+					stopAgentPolling();
+					setIsLoading( false );
+					setAgentSteps( [] );
+					setMessages( ( prev ) => [
+						...prev,
+						{ role: 'assistant', content: res.data.response || 'An error occurred.' },
+					] );
+				}
+			} catch {
+				pollRef.current.inFlight = false;
+				stopAgentPolling();
+				setIsLoading( false );
+				setAgentSteps( [] );
+				setMessages( ( prev ) => [
+					...prev,
+					{ role: 'assistant', content: 'An error occurred. Please try again.' },
+				] );
+			}
+		};
+
+		poll();
+		pollRef.current.interval = setInterval( poll, AGENT_POLL_INTERVAL_MS );
+	}, [ stopAgentPolling, executeActions ] );
+
+	/**
 	 * Send a message to the AI backend.
 	 *
 	 * @param {string} text User message text.
@@ -78,10 +191,10 @@ export function Sidebar() {
 			return;
 		}
 
-		// Add user message to UI.
 		const newMessages = [ ...messages, { role: 'user', content: text } ];
 		setMessages( newMessages );
 		setIsLoading( true );
+		setAgentSteps( [] );
 
 		try {
 			const response = await sendAjax( {
@@ -96,24 +209,33 @@ export function Sidebar() {
 				editor_context: editorContext,
 			} );
 
-			setIsLoading( false );
-
 			if ( response.success ) {
 				const data = response.data;
 
-				// Execute block actions if present.
+				if ( data.status === 'thinking' && data.session_id ) {
+					setAgentSteps( data.steps || [] );
+					startAgentPolling( data.session_id );
+					return;
+				}
+
+				setIsLoading( false );
+				stopAgentPolling();
+
 				if ( data.block_actions && data.block_actions.length > 0 ) {
 					await executeActions( data.block_actions );
 				}
 
-				// Add assistant response.
-				if ( data.response ) {
-					setMessages( ( prev ) => [
-						...prev,
-						{ role: 'assistant', content: data.response },
-					] );
+				let content = data.response || '';
+				if ( ! content || ! String( content ).trim() ) {
+					content = 'Task completed.';
 				}
+				setMessages( ( prev ) => [
+					...prev,
+					{ role: 'assistant', content },
+				] );
 			} else {
+				setIsLoading( false );
+				stopAgentPolling();
 				setMessages( ( prev ) => [
 					...prev,
 					{ role: 'assistant', content: response.data?.message || 'An error occurred. Please try again.' },
@@ -121,12 +243,14 @@ export function Sidebar() {
 			}
 		} catch {
 			setIsLoading( false );
+			stopAgentPolling();
+			setAgentSteps( [] );
 			setMessages( ( prev ) => [
 				...prev,
 				{ role: 'assistant', content: 'An error occurred. Please try again.' },
 			] );
 		}
-	}, [ messages, isLoading, editorContext, executeActions ] );
+	}, [ messages, isLoading, editorContext, executeActions, startAgentPolling, stopAgentPolling ] );
 
 	/**
 	 * Handle suggestion click.
@@ -186,6 +310,7 @@ export function Sidebar() {
 					<ChatMessages
 						messages={ messages }
 						isLoading={ isLoading || isExecuting }
+						agentSteps={ agentSteps }
 						userName={ userName }
 						onSuggestion={ handleSuggestion }
 						actionStatus={ actionStatus }
