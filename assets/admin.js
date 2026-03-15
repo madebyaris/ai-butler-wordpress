@@ -1,121 +1,57 @@
 jQuery(document).ready(function($) {
-	// Select All functionality
-	const $selectAll = $('#abw-select-all-scopes');
-	const $scopeCheckboxes = $('.abw-scope-checkbox');
+	'use strict';
 
-	// Handle Select All checkbox
-	$selectAll.on('change', function() {
-		const isChecked = $(this).is(':checked');
-		$scopeCheckboxes.prop('checked', isChecked);
-	});
-
-	// Update Select All checkbox state when individual checkboxes change
-	$scopeCheckboxes.on('change', function() {
-		const totalCheckboxes = $scopeCheckboxes.length;
-		const checkedCheckboxes = $scopeCheckboxes.filter(':checked').length;
-		
-		// Update Select All checkbox state
-		if (checkedCheckboxes === 0) {
-			$selectAll.prop('checked', false);
-			$selectAll.prop('indeterminate', false);
-		} else if (checkedCheckboxes === totalCheckboxes) {
-			$selectAll.prop('checked', true);
-			$selectAll.prop('indeterminate', false);
-		} else {
-			$selectAll.prop('checked', false);
-			$selectAll.prop('indeterminate', true);
+	function getErrorMessage(response, fallback) {
+		if (response && response.data && response.data.message) {
+			return response.data.message;
 		}
-	});
-
-	// Initialize Select All state on page load
-	const totalCheckboxes = $scopeCheckboxes.length;
-	const checkedCheckboxes = $scopeCheckboxes.filter(':checked').length;
-	if (checkedCheckboxes === totalCheckboxes && totalCheckboxes > 0) {
-		$selectAll.prop('checked', true);
-	} else if (checkedCheckboxes > 0) {
-		$selectAll.prop('indeterminate', true);
+		return fallback;
 	}
 
-	// Create token form
-	$('#abw-create-token-form').on('submit', function(e) {
-		e.preventDefault();
-
-		const scopes = [];
-		$('input[name="scopes[]"]:checked').each(function() {
-			scopes.push($(this).val());
-		});
-
-		const expires = parseInt($('#token-expires').val()) * 24 * 60 * 60 * 1000; // Convert to milliseconds
-		const expiresTimestamp = Math.floor(Date.now() / 1000) + (parseInt($('#token-expires').val()) * 24 * 60 * 60);
-
-		$.ajax({
-			url: abwAdmin.ajaxUrl,
-			type: 'POST',
-			data: {
-				action: 'abw_create_token',
-				nonce: abwAdmin.nonce,
-				scopes: scopes,
-				expires: expiresTimestamp,
-			},
-			success: function(response) {
-				if (response.success) {
-					$('#abw-token-display').val(response.data.token);
-					$('#abw-token-modal').show();
-				} else {
-					alert('Error: ' + (response.data?.message || 'Unknown error'));
-				}
-			},
-			error: function() {
-				alert('An error occurred. Please try again.');
-			}
-		});
-	});
-
-	// Copy token
-	$('#abw-copy-token').on('click', function() {
-		const tokenInput = $('#abw-token-display');
-		tokenInput.select();
-		document.execCommand('copy');
-		$(this).text('Copied!');
-		setTimeout(() => {
-			$(this).text('Copy Token');
-		}, 2000);
-	});
-
-	// Close modal
-	$('.abw-modal-close').on('click', function() {
-		$('.abw-modal').hide();
-		location.reload(); // Reload to show new token in list
-	});
-
-	// Revoke token
-	$('.abw-revoke-token').on('click', function() {
-		if (!confirm('Are you sure you want to revoke this token?')) {
+	function setConnectionStatus(type, message) {
+		const $status = $('#abw-test-connection-status');
+		if (!$status.length) {
 			return;
 		}
 
-		const tokenId = $(this).data('token-id');
-		const $row = $(this).closest('tr');
+		$status
+			.removeClass('is-success is-error is-loading')
+			.addClass(type ? 'is-' + type : '')
+			.text(message || '');
+	}
+
+	$('#abw-test-connection').on('click', function() {
+		if (typeof abwAdmin === 'undefined') {
+			return;
+		}
+
+		const $button = $(this);
+		const defaultLabel = $button.text();
+		$button.prop('disabled', true).text(abwAdmin.i18n && abwAdmin.i18n.testing ? abwAdmin.i18n.testing : 'Testing...');
+		setConnectionStatus('loading', abwAdmin.i18n && abwAdmin.i18n.testing_message ? abwAdmin.i18n.testing_message : 'Checking saved provider settings...');
 
 		$.ajax({
 			url: abwAdmin.ajaxUrl,
 			type: 'POST',
 			data: {
-				action: 'abw_revoke_token',
-				nonce: abwAdmin.nonce,
-				token_id: tokenId,
+				action: 'abw_test_ai_connection',
+				nonce: abwAdmin.nonce
 			},
 			success: function(response) {
 				if (response.success) {
-					$row.fadeOut(function() {
-						$(this).remove();
-					});
+					setConnectionStatus('success', response.data.message);
 				} else {
-					alert('Error: ' + (response.data?.message || 'Unknown error'));
+					setConnectionStatus('error', getErrorMessage(response, abwAdmin.i18n ? abwAdmin.i18n.error : 'Unable to test the connection.'));
 				}
 			},
-			error: function() {
-				alert('An error occurred. Please try again.');
+			error: function(xhr) {
+				const message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
+					? xhr.responseJSON.data.message
+					: (abwAdmin.i18n ? abwAdmin.i18n.error : 'Unable to test the connection.');
+				setConnectionStatus('error', message);
+			},
+			complete: function() {
+				$button.prop('disabled', false).text(defaultLabel);
 			}
 		});
 	});
@@ -124,7 +60,6 @@ jQuery(document).ready(function($) {
 	// Background Jobs Page
 	// =========================================================================
 
-	// Retry job
 	$(document).on('click', '.abw-retry-job', function() {
 		if (typeof abwAdmin === 'undefined') return;
 		if (!confirm(abwAdmin.i18n ? abwAdmin.i18n.retry_confirm : 'Retry this job?')) return;
@@ -139,11 +74,10 @@ jQuery(document).ready(function($) {
 			data: {
 				action: 'abw_retry_job',
 				nonce: abwAdmin.nonce,
-				job_id: jobId,
+				job_id: jobId
 			},
 			success: function(response) {
 				if (response.success) {
-					// Update the row visually.
 					const $row = $btn.closest('tr');
 					$row.find('.abw-job-badge')
 						.removeClass('abw-job-badge-failed')
@@ -151,18 +85,20 @@ jQuery(document).ready(function($) {
 						.text('Pending');
 					$btn.remove();
 				} else {
-					alert(response.data?.message || 'Error retrying job');
+					alert(getErrorMessage(response, 'Error retrying job'));
 					$btn.prop('disabled', false).text('Retry');
 				}
 			},
-			error: function() {
-				alert(abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+			error: function(xhr) {
+				const message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
+					? xhr.responseJSON.data.message
+					: (abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+				alert(message);
 				$btn.prop('disabled', false).text('Retry');
 			}
 		});
 	});
 
-	// Cancel job
 	$(document).on('click', '.abw-cancel-job', function() {
 		if (typeof abwAdmin === 'undefined') return;
 		if (!confirm(abwAdmin.i18n ? abwAdmin.i18n.cancel_confirm : 'Cancel this job?')) return;
@@ -177,7 +113,7 @@ jQuery(document).ready(function($) {
 			data: {
 				action: 'abw_cancel_job',
 				nonce: abwAdmin.nonce,
-				job_id: jobId,
+				job_id: jobId
 			},
 			success: function(response) {
 				if (response.success) {
@@ -188,27 +124,31 @@ jQuery(document).ready(function($) {
 						.text('Cancelled');
 					$btn.remove();
 				} else {
-					alert(response.data?.message || 'Error cancelling job');
+					alert(getErrorMessage(response, 'Error cancelling job'));
 					$btn.prop('disabled', false).text('Cancel');
 				}
 			},
-			error: function() {
-				alert(abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+			error: function(xhr) {
+				const message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
+					? xhr.responseJSON.data.message
+					: (abwAdmin.i18n ? abwAdmin.i18n.error : 'An error occurred.');
+				alert(message);
 				$btn.prop('disabled', false).text('Cancel');
 			}
 		});
 	});
 
-	// Auto-refresh for Background Jobs page
 	let jobsRefreshInterval = null;
 
 	function startJobsAutoRefresh() {
-		if (jobsRefreshInterval) return;
-		if (!$('#abw-jobs-table-container').length) return;
+		if (jobsRefreshInterval || !$('#abw-jobs-table-container').length) {
+			return;
+		}
 
 		jobsRefreshInterval = setInterval(function() {
-			if (!$('#abw-jobs-auto-refresh').is(':checked')) return;
-			if (typeof abwAdmin === 'undefined') return;
+			if (!$('#abw-jobs-auto-refresh').is(':checked') || typeof abwAdmin === 'undefined') {
+				return;
+			}
 
 			$.ajax({
 				url: abwAdmin.ajaxUrl,
@@ -216,17 +156,16 @@ jQuery(document).ready(function($) {
 				data: {
 					action: 'abw_admin_job_list',
 					nonce: abwAdmin.nonce,
-					page: 1,
+					page: 1
 				},
 				success: function(response) {
-					if (!response.success) return;
+					if (!response.success) {
+						return;
+					}
 
-					// Reload the page if job statuses have changed.
-					// For simplicity, we do a full page reload every 5 seconds
-					// when auto-refresh is on and there are active (pending/processing) jobs.
 					const jobs = response.data.jobs || [];
-					const hasActive = jobs.some(function(j) {
-						return j.status === 'pending' || j.status === 'processing';
+					const hasActive = jobs.some(function(job) {
+						return job.status === 'pending' || job.status === 'processing';
 					});
 
 					if (hasActive) {
@@ -237,7 +176,6 @@ jQuery(document).ready(function($) {
 		}, 5000);
 	}
 
-	// Start auto-refresh if we're on the jobs page.
 	if ($('#abw-jobs-table-container').length || $('#abw-jobs-auto-refresh').length) {
 		startJobsAutoRefresh();
 	}

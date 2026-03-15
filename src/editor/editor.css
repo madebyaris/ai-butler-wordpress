@@ -211,6 +211,29 @@
 	border: 1px solid var(--abw-editor-border);
 }
 
+.abw-editor-sidebar .abw-confirmation-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.abw-editor-sidebar .abw-confirmation-card p {
+	margin: 0;
+	color: var(--abw-editor-text-secondary);
+}
+
+.abw-editor-sidebar .abw-confirmation-details {
+	margin: 0;
+	padding-left: 18px;
+	color: var(--abw-editor-text-secondary);
+}
+
+.abw-editor-sidebar .abw-confirmation-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 /* Message content formatting */
 .abw-editor-sidebar .abw-message-content p {
 	margin: 0 0 8px;
@@ -544,13 +567,25 @@
    ============================================================ */
 .abw-editor-sidebar-footer {
 	padding: 6px 12px;
-	text-align: center;
 	border-top: 1px solid var(--abw-editor-border);
 	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 }
 
 .abw-editor-sidebar-provider {
 	font-size: 11px;
 	color: var(--abw-editor-text-secondary);
 	text-transform: capitalize;
+}
+
+.abw-editor-sidebar-mode {
+	border: 1px solid var(--abw-editor-border);
+	border-radius: 6px;
+	font-size: 11px;
+	padding: 4px 8px;
+	background: var(--abw-editor-surface);
+	color: var(--abw-editor-text-secondary);
 }

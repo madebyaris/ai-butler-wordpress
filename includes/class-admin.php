@@ -22,6 +22,7 @@ class ABW_Admin {
 	public static function init() {
 		add_action( 'admin_menu', [ __CLASS__, 'add_admin_menu' ] );
 		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_scripts' ] );
+		add_action( 'wp_ajax_abw_test_ai_connection', [ __CLASS__, 'ajax_test_ai_connection' ] );
 	}
 
 	/**
@@ -43,7 +44,7 @@ class ABW_Admin {
 			__( 'Settings', 'abw-ai' ),
 			__( 'Settings', 'abw-ai' ),
 			'manage_options',
-			'ayu-ai-settings',
+			'abw-ai-settings',
 			[ __CLASS__, 'render_settings_page' ]
 		);
 
@@ -85,15 +86,11 @@ class ABW_Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'ayu-admin', ABW_URL . 'assets/admin.css', [], ABW_VERSION );
-		wp_enqueue_script( 'ayu-admin', ABW_URL . 'assets/admin.js', [ 'jquery' ], ABW_VERSION, true );
-		wp_localize_script( 'ayu-admin', 'ayuAdmin', [
-			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-			'nonce'   => wp_create_nonce( 'ayu-admin' ),
-		] );
+		wp_enqueue_style( 'abw-admin', ABW_URL . 'assets/admin.css', [], ABW_VERSION );
+		wp_enqueue_script( 'abw-admin', ABW_URL . 'assets/admin.js', [ 'jquery' ], ABW_VERSION, true );
 
 		// Additional localized data for the background jobs page using the abw-admin nonce.
-		wp_localize_script( 'ayu-admin', 'abwAdmin', [
+		wp_localize_script( 'abw-admin', 'abwAdmin', [
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			'nonce'   => wp_create_nonce( 'abw-admin' ),
 			'i18n'    => [
@@ -102,6 +99,8 @@ class ABW_Admin {
 				'retried'        => __( 'Job queued for retry.', 'abw-ai' ),
 				'cancelled'      => __( 'Job cancelled.', 'abw-ai' ),
 				'error'          => __( 'An error occurred. Please try again.', 'abw-ai' ),
+				'testing'        => __( 'Testing...', 'abw-ai' ),
+				'testing_message' => __( 'Checking saved provider settings...', 'abw-ai' ),
 			],
 		] );
 	}
@@ -112,22 +111,30 @@ class ABW_Admin {
 	public static function render_main_page() {
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'ABW-AI Elementor', 'abw-ai' ); ?></h1>
-			<div class="ayu-welcome">
-				<h2><?php esc_html_e( 'Welcome to ABW-AI', 'abw-ai' ); ?></h2>
-				<p><?php esc_html_e( 'ABW-AI is an open-source AI assistant for WordPress that works with MCP-compatible clients like Cursor.', 'abw-ai' ); ?></p>
-				<h3><?php esc_html_e( 'Quick Start', 'abw-ai' ); ?></h3>
-				<ol>
-					<li><?php esc_html_e( 'Go to Tokens page to create a Personal Access Token', 'abw-ai' ); ?></li>
-					<li><?php esc_html_e( 'Configure your MCP client (Cursor) with the token', 'abw-ai' ); ?></li>
-					<li><?php esc_html_e( 'Start using ABW-AI tools in Cursor', 'abw-ai' ); ?></li>
-				</ol>
-				<p>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=ayu-ai-tokens' ) ); ?>" class="button button-primary">
-						<?php esc_html_e( 'Create Token', 'abw-ai' ); ?>
+			<h1><?php esc_html_e( 'ABW-AI', 'abw-ai' ); ?></h1>
+			<div class="abw-welcome">
+				<h2><?php esc_html_e( 'WordPress operations assistant', 'abw-ai' ); ?></h2>
+				<p><?php esc_html_e( 'ABW-AI lives inside wp-admin and the block editor so you can manage content, run site operations, and launch longer background tasks without leaving WordPress.', 'abw-ai' ); ?></p>
+				<div class="abw-admin-card-grid">
+					<div class="abw-admin-card">
+						<h3><?php esc_html_e( '1. Configure a provider', 'abw-ai' ); ?></h3>
+						<p><?php esc_html_e( 'Add your OpenAI, Anthropic, or OpenAI-compatible API credentials and test the connection from Settings.', 'abw-ai' ); ?></p>
+					</div>
+					<div class="abw-admin-card">
+						<h3><?php esc_html_e( '2. Start in chat', 'abw-ai' ); ?></h3>
+						<p><?php esc_html_e( 'Use the floating admin chat for site-wide tasks, or open the Gutenberg sidebar to edit a post with block-aware AI actions.', 'abw-ai' ); ?></p>
+					</div>
+					<div class="abw-admin-card">
+						<h3><?php esc_html_e( '3. Review long jobs', 'abw-ai' ); ?></h3>
+						<p><?php esc_html_e( 'Content generation and other long-running requests are queued automatically. Track them from the Background Jobs screen.', 'abw-ai' ); ?></p>
+					</div>
+				</div>
+				<p class="abw-admin-actions">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-settings' ) ); ?>" class="button button-primary">
+						<?php esc_html_e( 'Open Settings', 'abw-ai' ); ?>
 					</a>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=ayu-ai-settings' ) ); ?>" class="button">
-						<?php esc_html_e( 'Settings', 'abw-ai' ); ?>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-jobs' ) ); ?>" class="button">
+						<?php esc_html_e( 'View Background Jobs', 'abw-ai' ); ?>
 					</a>
 				</p>
 			</div>
@@ -192,6 +199,14 @@ class ABW_Admin {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'ABW-AI Settings', 'abw-ai' ); ?></h1>
+			<div class="abw-welcome">
+				<h2><?php esc_html_e( 'Quick start', 'abw-ai' ); ?></h2>
+				<ol>
+					<li><?php esc_html_e( 'Choose your provider and save your API credentials.', 'abw-ai' ); ?></li>
+					<li><?php esc_html_e( 'Use the Test connection button to verify the saved provider can answer requests.', 'abw-ai' ); ?></li>
+					<li><?php esc_html_e( 'Open the ABW-AI chat from the admin bar or the Gutenberg sidebar to start working.', 'abw-ai' ); ?></li>
+				</ol>
+			</div>
 			
 			<form method="post" action="">
 				<?php wp_nonce_field( 'abw_settings', 'abw_settings_nonce' ); ?>
@@ -223,10 +238,19 @@ class ABW_Admin {
 						<th><label for="abw_ai_provider"><?php esc_html_e( 'AI Provider', 'abw-ai' ); ?></label></th>
 						<td>
 							<select id="abw_ai_provider" name="abw_ai_provider">
-								<option value="openai" <?php selected( $current_provider, 'openai' ); ?>>OpenAI (GPT-4)</option>
-								<option value="anthropic" <?php selected( $current_provider, 'anthropic' ); ?>>Anthropic (Claude)</option>
-								<option value="custom" <?php selected( $current_provider, 'custom' ); ?>>Custom Provider</option>
+								<option value="openai" <?php selected( $current_provider, 'openai' ); ?>>OpenAI</option>
+								<option value="anthropic" <?php selected( $current_provider, 'anthropic' ); ?>>Anthropic</option>
+								<option value="custom" <?php selected( $current_provider, 'custom' ); ?>><?php esc_html_e( 'OpenAI-compatible', 'abw-ai' ); ?></option>
 							</select>
+							<p class="description"><?php esc_html_e( 'ABW-AI currently supports OpenAI, Anthropic, and any OpenAI-compatible endpoint such as MiniMax.', 'abw-ai' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Connection Check', 'abw-ai' ); ?></th>
+						<td>
+							<button type="button" class="button" id="abw-test-connection"><?php esc_html_e( 'Test connection', 'abw-ai' ); ?></button>
+							<span id="abw-test-connection-status" class="abw-connection-status" aria-live="polite"></span>
+							<p class="description"><?php esc_html_e( 'Uses the currently saved provider settings. Save changes first if you edited credentials on this page.', 'abw-ai' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -321,20 +345,20 @@ class ABW_Admin {
 					</tr>
 				</table>
 				
-				<h2><?php esc_html_e( 'MCP API Settings', 'abw-ai' ); ?></h2>
+				<h2><?php esc_html_e( 'Advanced API Settings', 'abw-ai' ); ?></h2>
 				<table class="form-table">
 					<tr>
 						<th><label for="abw_rate_limit"><?php esc_html_e( 'Rate Limit (requests/minute)', 'abw-ai' ); ?></label></th>
 						<td>
 							<input type="number" id="abw_rate_limit" name="abw_rate_limit" value="<?php echo esc_attr( get_option( 'abw_rate_limit', 100 ) ); ?>" min="1" max="1000" />
-							<p class="description"><?php esc_html_e( 'Maximum requests per minute per token/IP address.', 'abw-ai' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Reserved for external integrations and future API surfaces.', 'abw-ai' ); ?></p>
 						</td>
 					</tr>
 					<tr>
 						<th><label for="abw_cors_origins"><?php esc_html_e( 'Allowed CORS Origins', 'abw-ai' ); ?></label></th>
 						<td>
 							<textarea id="abw_cors_origins" name="abw_cors_origins" rows="3" class="large-text"><?php echo esc_textarea( get_option( 'abw_cors_origins', '' ) ); ?></textarea>
-							<p class="description"><?php esc_html_e( 'One origin per line (e.g., https://example.com). Leave empty for same-origin only.', 'abw-ai' ); ?></p>
+							<p class="description"><?php esc_html_e( 'One origin per line for any external clients you allow to call future API endpoints. Leave empty for same-origin only.', 'abw-ai' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -532,7 +556,7 @@ class ABW_Admin {
 				<div class="notice notice-warning">
 					<p>
 						<?php esc_html_e( 'Debug logging is disabled. Enable it in', 'abw-ai' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=ayu-ai-settings' ) ); ?>"><?php esc_html_e( 'ABW-AI Settings', 'abw-ai' ); ?></a>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-settings' ) ); ?>"><?php esc_html_e( 'ABW-AI Settings', 'abw-ai' ); ?></a>
 						<?php esc_html_e( 'to record chat requests, AI calls, and tool execution.', 'abw-ai' ); ?>
 					</p>
 				</div>
@@ -578,6 +602,47 @@ class ABW_Admin {
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Test the saved AI connection from the settings page.
+	 */
+	public static function ajax_test_ai_connection() {
+		check_ajax_referer( 'abw-admin', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
+		}
+
+		$provider = ABW_AI_Router::get_provider();
+		$response = ABW_AI_Router::chat(
+			[
+				[
+					'role'    => 'user',
+					'content' => 'Reply with the single word OK.',
+				],
+			],
+			[],
+			[
+				'provider'   => $provider,
+				'max_tokens' => 32,
+			]
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( [ 'message' => $response->get_error_message() ], 400 );
+		}
+
+		wp_send_json_success(
+			[
+				'message' => sprintf(
+					/* translators: 1: provider name, 2: model name */
+					__( 'Connected successfully to %1$s using %2$s.', 'abw-ai' ),
+					esc_html( ucfirst( $provider ) ),
+					esc_html( ABW_AI_Router::get_model( $provider ) )
+				),
+			]
+		);
 	}
 }
 

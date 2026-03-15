@@ -49,6 +49,55 @@
 	margin-top: 20px;
 }
 
+.abw-admin-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.abw-admin-card {
+	background: var(--abw-admin-surface-2);
+	border: 1px solid var(--abw-admin-border);
+	border-radius: var(--abw-admin-radius-sm);
+	padding: 18px;
+}
+
+.abw-admin-card h3 {
+	margin: 0 0 8px;
+	font-size: 15px;
+	color: var(--abw-admin-text);
+}
+
+.abw-admin-card p {
+	margin: 0;
+	color: var(--abw-admin-text-2);
+	line-height: 1.5;
+}
+
+.abw-admin-actions {
+	margin-top: 20px;
+}
+
+.abw-connection-status {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 12px;
+	font-weight: 500;
+}
+
+.abw-connection-status.is-loading {
+	color: var(--abw-admin-warning);
+}
+
+.abw-connection-status.is-success {
+	color: var(--abw-admin-success);
+}
+
+.abw-connection-status.is-error {
+	color: var(--abw-admin-error);
+}
+
 .abw-token-form {
 	background: var(--abw-admin-surface);
 	padding: 24px;

@@ -178,6 +178,33 @@
 	background: var(--abw-bg-secondary);
 }
 
+.abw-confirmation-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.abw-confirmation-card p {
+	margin: 0;
+	color: var(--abw-text-secondary);
+}
+
+.abw-confirmation-details {
+	margin: 0;
+	padding-left: 18px;
+	color: var(--abw-text-secondary);
+}
+
+.abw-confirmation-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.abw-confirmation-actions .button {
+	min-height: 32px;
+}
+
 .abw-chat-messages::-webkit-scrollbar {
 	width: 5px;
 }
@@ -671,7 +698,10 @@
 	padding: 7px 20px;
 	background: var(--abw-bg-secondary);
 	border-top: 1px solid var(--abw-border-light);
-	text-align: center;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
 	flex-shrink: 0;
 }
 
@@ -681,6 +711,15 @@
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-weight: 500;
+}
+
+.abw-agent-mode-select {
+	border: 1px solid var(--abw-border);
+	border-radius: var(--abw-radius-xs);
+	background: var(--abw-bg);
+	color: var(--abw-text-secondary);
+	font-size: 12px;
+	padding: 4px 8px;
 }
 
 /* ==========================================================================

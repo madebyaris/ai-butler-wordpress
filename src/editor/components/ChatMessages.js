@@ -117,6 +117,58 @@ function AgentStepsIndicator( { steps } ) {
 }
 
 /**
+ * Pending confirmation card for sensitive actions.
+ *
+ * @param {Object}   props                    Component props.
+ * @param {Object}   props.confirmation       Confirmation payload.
+ * @param {Function} props.onConfirmationAction Handler for confirm/cancel.
+ * @param {boolean}  props.isConfirming       Whether confirmation request is in flight.
+ * @return {import('@wordpress/element').WPElement|null} Confirmation message.
+ */
+function ConfirmationMessage( { confirmation, onConfirmationAction, isConfirming } ) {
+	if ( ! confirmation ) {
+		return null;
+	}
+
+	return (
+		<div className="abw-message abw-message-assistant abw-confirmation-message">
+			<div className="abw-message-avatar"><AssistantIcon /></div>
+			<div className="abw-message-content">
+				<div className="abw-confirmation-card">
+					<strong>{ confirmation.title || 'Confirmation required' }</strong>
+					<p>{ confirmation.message || 'Please confirm this action.' }</p>
+					{ Array.isArray( confirmation.details ) && confirmation.details.length > 0 && (
+						<ul className="abw-confirmation-details">
+							{ confirmation.details.map( ( detail ) => (
+								<li key={ detail }>{ detail }</li>
+							) ) }
+						</ul>
+					) }
+					<div className="abw-confirmation-actions">
+						<button
+							type="button"
+							className="button button-primary"
+							onClick={ () => onConfirmationAction( 'confirm' ) }
+							disabled={ isConfirming }
+						>
+							{ confirmation.confirm_label || 'Confirm action' }
+						</button>
+						<button
+							type="button"
+							className="button"
+							onClick={ () => onConfirmationAction( 'cancel' ) }
+							disabled={ isConfirming }
+						>
+							{ confirmation.cancel_label || 'Cancel' }
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/**
  * Welcome message component.
  *
  * @param {Object}   props               Component props.
@@ -161,7 +213,7 @@ function WelcomeMessage( { onSuggestion } ) {
  * @param {Object}   props.actionStatus   Current block action status.
  * @return {import('@wordpress/element').WPElement} Messages container.
  */
-export function ChatMessages( { messages, isLoading, agentSteps = [], userName, onSuggestion, actionStatus } ) {
+export function ChatMessages( { messages, isLoading, agentSteps = [], userName, onSuggestion, actionStatus, pendingConfirmation = null, onConfirmationAction = () => {}, isConfirming = false } ) {
 	const containerRef = useRef( null );
 
 	// Auto-scroll to bottom on new messages.
@@ -196,6 +248,12 @@ export function ChatMessages( { messages, isLoading, agentSteps = [], userName, 
 					</div>
 				</div>
 			) }
+
+			<ConfirmationMessage
+				confirmation={ pendingConfirmation }
+				onConfirmationAction={ onConfirmationAction }
+				isConfirming={ isConfirming }
+			/>
 
 			{ isLoading && <AgentStepsIndicator steps={ agentSteps } /> }
 		</div>

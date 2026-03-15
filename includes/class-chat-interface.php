@@ -58,6 +58,7 @@ class ABW_Chat_Interface {
 		// AJAX handlers
 		add_action( 'wp_ajax_abw_chat_message', [ __CLASS__, 'handle_chat_message' ] );
 		add_action( 'wp_ajax_abw_agent_poll', [ __CLASS__, 'handle_agent_poll' ] );
+		add_action( 'wp_ajax_abw_confirmation_action', [ __CLASS__, 'handle_confirmation_action' ] );
 		add_action( 'wp_ajax_abw_chat_history', [ __CLASS__, 'get_chat_history' ] );
 		add_action( 'wp_ajax_abw_clear_chat', [ __CLASS__, 'clear_chat_history' ] );
 	}
@@ -166,6 +167,8 @@ class ABW_Chat_Interface {
 			'userName'     => wp_get_current_user()->display_name,
 			'siteName'     => get_bloginfo( 'name' ),
 			'currentPage'  => self::get_current_page_context(),
+			'agentPackages' => ABW_AI_Router::get_agent_packages(),
+			'defaultAgentMode' => 'general',
 			'debugToolResults' => $debug_tool_results,
 			'adminJobsUrl' => admin_url( 'admin.php?page=abw-ai-jobs' ),
 			'i18n'         => [
@@ -224,6 +227,8 @@ class ABW_Chat_Interface {
 			'userName' => wp_get_current_user()->display_name,
 			'siteName' => get_bloginfo( 'name' ),
 			'provider' => ucfirst( ABW_AI_Router::get_provider() ),
+			'agentPackages' => ABW_AI_Router::get_agent_packages(),
+			'defaultAgentMode' => 'general',
 			'postId'   => $post ? $post->ID : 0,
 			'postType' => $post ? $post->post_type : 'post',
 		] );
@@ -326,6 +331,14 @@ class ABW_Chat_Interface {
 		$hidden = $is_open ? 'false' : 'true';
 
 		$has_api_key = ! empty( ABW_AI_Router::get_api_key( ABW_AI_Router::get_provider() ) );
+		$agent_mode_options = '';
+		foreach ( ABW_AI_Router::get_agent_packages() as $package_id => $package ) {
+			$agent_mode_options .= sprintf(
+				"<option value='%s'>%s</option>",
+				esc_attr( $package_id ),
+				esc_html( $package['label'] )
+			);
+		}
 
 		$html = "
 		<!-- ABW-AI Sidebar -->
@@ -463,6 +476,12 @@ class ABW_Chat_Interface {
 					<span class='abw-chat-provider'>
 						" . esc_html( ucfirst( ABW_AI_Router::get_provider() ) ) . "
 					</span>
+					<label class='abw-agent-mode-control'>
+						<span class='abw-sr-only'>" . esc_html__( 'Agent package', 'abw-ai' ) . "</span>
+						<select id='abw-agent-mode' class='abw-agent-mode-select'>
+							{$agent_mode_options}
+						</select>
+					</label>
 				</div>
 			</div>
 		</div>
@@ -483,6 +502,11 @@ class ABW_Chat_Interface {
 	const AGENTIC_SESSION_TTL = 600;
 
 	/**
+	 * User meta key for pending confirmations.
+	 */
+	const PENDING_CONFIRMATION_META_KEY = 'abw_pending_confirmation';
+
+	/**
 	 * Handle chat message AJAX request
 	 */
 	public static function handle_chat_message(): void {
@@ -495,6 +519,8 @@ class ABW_Chat_Interface {
 		$message        = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
 		$context        = isset( $_POST['context'] ) ? json_decode( stripslashes( $_POST['context'] ), true ) : [];
 		$editor_context = isset( $_POST['editor_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['editor_context'] ) ) : '';
+		$agent_mode     = isset( $_POST['agent_mode'] ) ? sanitize_key( wp_unslash( $_POST['agent_mode'] ) ) : 'general';
+		$history_scope  = self::sanitize_history_scope( isset( $_POST['history_scope'] ) ? sanitize_key( wp_unslash( $_POST['history_scope'] ) ) : 'global' );
 
 		if ( empty( $message ) ) {
 			wp_send_json_error( [ 'message' => __( 'Message cannot be empty.', 'abw-ai' ) ] );
@@ -504,17 +530,32 @@ class ABW_Chat_Interface {
 
 		$is_block_editor = ! empty( $editor_context );
 		$user_id        = get_current_user_id();
-		$history        = self::get_user_history( $user_id );
+		$history        = self::get_user_history( $user_id, $history_scope );
+		$pending_confirmation = self::get_pending_confirmation( $user_id, $history_scope );
+
+		if ( ! empty( $pending_confirmation ) ) {
+			wp_send_json_error(
+				[
+					'message'      => __( 'Please confirm or cancel the pending action before starting another request.', 'abw-ai' ),
+					'confirmation' => $pending_confirmation,
+				],
+				409
+			);
+		}
 
 		$system_prompt = $is_block_editor
-			? ABW_AI_Router::get_system_prompt( $editor_context )
-			: ABW_AI_Router::get_system_prompt();
+			? ABW_AI_Router::get_system_prompt( $editor_context, $agent_mode )
+			: ABW_AI_Router::get_system_prompt( '', $agent_mode );
+		$history_summary = self::summarize_history_context( $history );
+		if ( '' !== $history_summary ) {
+			$system_prompt .= "\n\nConversation memory:\n" . $history_summary;
+		}
 
 		$messages = [
 			[ 'role' => 'system', 'content' => $system_prompt ],
 		];
 
-		$recent_history = array_slice( $history, -10 );
+		$recent_history = array_slice( $history, -8 );
 		foreach ( $recent_history as $entry ) {
 			$messages[] = [
 				'role'    => $entry['role'],
@@ -528,7 +569,7 @@ class ABW_Chat_Interface {
 		}
 		$messages[] = [ 'role' => 'user', 'content' => $user_message ];
 
-		$tools = ABW_AI_Router::get_available_tools();
+		$tools = ABW_AI_Router::get_available_tools( $agent_mode );
 		$provider = ABW_AI_Router::get_provider();
 
 		// Run first iteration.
@@ -552,8 +593,8 @@ class ABW_Chat_Interface {
 		// This avoids false "timeout/error" states in UI polling while the job is processing.
 		if ( $queued_background ) {
 			$final_response = __( 'Task queued for background processing.', 'abw-ai' );
-			self::save_to_history( $user_id, 'user', $message );
-			self::save_to_history( $user_id, 'assistant', $final_response );
+			self::save_to_history( $user_id, 'user', $message, $history_scope );
+			self::save_to_history( $user_id, 'assistant', $final_response, $history_scope );
 			if ( isset( $response['usage'] ) ) {
 				ABW_AI_Router::track_usage( $provider, $response['usage'] );
 			}
@@ -574,6 +615,7 @@ class ABW_Chat_Interface {
 				'steps'          => $steps,
 				'background_job' => $background_jobs[0],
 				'tool_results'   => $result['all_tool_results'] ?? [],
+				'confirmation'   => $result['confirmation'] ?? null,
 			] );
 		}
 
@@ -584,8 +626,13 @@ class ABW_Chat_Interface {
 			if ( ( $final_response === '' || ! trim( $final_response ) ) && ! empty( $all_tool_results ) ) {
 				$final_response = self::format_tool_results_for_response( $all_tool_results );
 			}
-			self::save_to_history( $user_id, 'user', $message );
-			self::save_to_history( $user_id, 'assistant', $final_response );
+			if ( ! empty( $result['confirmation'] ) ) {
+				self::set_pending_confirmation( $user_id, $result['confirmation'], $history_scope );
+			} else {
+				self::clear_pending_confirmation( $user_id, $history_scope );
+			}
+			self::save_to_history( $user_id, 'user', $message, $history_scope );
+			self::save_to_history( $user_id, 'assistant', $final_response, $history_scope );
 			if ( isset( $response['usage'] ) ) {
 				ABW_AI_Router::track_usage( $provider, $response['usage'] );
 			}
@@ -598,6 +645,9 @@ class ABW_Chat_Interface {
 				'steps'        => $steps,
 				'tool_results' => $result['all_tool_results'] ?? [],
 			];
+			if ( ! empty( $result['confirmation'] ) ) {
+				$payload['confirmation'] = $result['confirmation'];
+			}
 			if ( ! empty( $block_actions ) ) {
 				$payload['block_actions'] = $block_actions;
 			}
@@ -619,6 +669,7 @@ class ABW_Chat_Interface {
 			'block_actions'    => $block_actions,
 			'final_response'   => null,
 			'user_id'          => $user_id,
+			'history_scope'    => $history_scope,
 			'message'          => $message,
 			'editor_context'   => $editor_context,
 			'provider'         => $provider,
@@ -626,7 +677,7 @@ class ABW_Chat_Interface {
 			'all_tool_results' => $result['all_tool_results'] ?? [],
 		];
 		set_transient( 'abw_agent_' . $session_id, $session, self::AGENTIC_SESSION_TTL );
-		self::save_to_history( $user_id, 'user', $message );
+		self::save_to_history( $user_id, 'user', $message, $history_scope );
 
 		ABW_Debug_Log::log( 'chat_thinking', [ 'session_id' => $session_id, 'iteration' => $iteration, 'steps_count' => count( $steps ), 'tool_calls_count' => count( $response['tool_calls'] ?? [] ) ], 'Session created, polling started' );
 
@@ -679,6 +730,7 @@ class ABW_Chat_Interface {
 		$tools     = $session['tools'];
 		$provider  = $session['provider'];
 		$user_id   = (int) $session['user_id'];
+		$history_scope = self::sanitize_history_scope( (string) ( $session['history_scope'] ?? 'global' ) );
 
 		$result = self::run_agentic_iteration( $messages, $tools, $provider, $user_id );
 
@@ -701,12 +753,16 @@ class ABW_Chat_Interface {
 		$session['block_actions']      = array_merge( $session['block_actions'] ?? [], $result['block_actions'] );
 		$session['background_jobs']   = array_merge( $session['background_jobs'] ?? [], $result['background_jobs'] );
 		$session['all_tool_results']   = array_merge( $session['all_tool_results'] ?? [], $result['all_tool_results'] ?? [] );
+		if ( ! empty( $result['confirmation'] ) ) {
+			$session['pending_confirmation'] = $result['confirmation'];
+			self::set_pending_confirmation( $user_id, $result['confirmation'], $history_scope );
+		}
 		$queued_background             = ! empty( $result['background_jobs'] );
 
 		if ( $queued_background ) {
 			$session['status']         = 'done';
 			$session['final_response'] = __( 'Task queued for background processing.', 'abw-ai' );
-			self::save_to_history( $user_id, 'assistant', $session['final_response'] );
+			self::save_to_history( $user_id, 'assistant', $session['final_response'], $history_scope );
 			if ( isset( $result['response']['usage'] ) ) {
 				ABW_AI_Router::track_usage( $provider, $result['response']['usage'] );
 			}
@@ -728,6 +784,7 @@ class ABW_Chat_Interface {
 				'block_actions'  => $session['block_actions'] ?? [],
 				'background_job' => $session['background_jobs'][0],
 				'tool_results'   => $session['all_tool_results'] ?? [],
+				'confirmation'   => $session['pending_confirmation'] ?? null,
 			] );
 			return;
 		}
@@ -744,7 +801,10 @@ class ABW_Chat_Interface {
 				$final = self::format_tool_results_for_response( $all_tool_results );
 			}
 			$session['final_response'] = $final;
-			self::save_to_history( $user_id, 'assistant', $final );
+			if ( empty( $session['pending_confirmation'] ) ) {
+				self::clear_pending_confirmation( $user_id, $history_scope );
+			}
+			self::save_to_history( $user_id, 'assistant', $final, $history_scope );
 			if ( isset( $response['usage'] ) ) {
 				ABW_AI_Router::track_usage( $provider, $response['usage'] );
 			}
@@ -756,6 +816,9 @@ class ABW_Chat_Interface {
 				'steps'        => $session['steps'],
 				'tool_results' => $session['all_tool_results'] ?? [],
 			];
+			if ( ! empty( $session['pending_confirmation'] ) ) {
+				$payload['confirmation'] = $session['pending_confirmation'];
+			}
 			if ( ! empty( $session['block_actions'] ) ) {
 				$payload['block_actions'] = $session['block_actions'];
 			}
@@ -778,15 +841,154 @@ class ABW_Chat_Interface {
 	}
 
 	/**
+	 * Handle confirm/cancel actions for sensitive tool calls.
+	 */
+	public static function handle_confirmation_action(): void {
+		check_ajax_referer( 'abw-chat', 'nonce' );
+
+		if ( ! current_user_can( 'use_abw' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
+		}
+
+		$user_id = get_current_user_id();
+		$history_scope = self::sanitize_history_scope( isset( $_POST['history_scope'] ) ? sanitize_key( wp_unslash( $_POST['history_scope'] ) ) : 'global' );
+		$pending = self::get_pending_confirmation( $user_id, $history_scope );
+		if ( empty( $pending ) || empty( $pending['tool'] ) ) {
+			wp_send_json_error( [ 'message' => __( 'No action is waiting for confirmation.', 'abw-ai' ) ], 404 );
+		}
+
+		$confirmation_action = isset( $_POST['confirmation_action'] ) ? sanitize_key( wp_unslash( $_POST['confirmation_action'] ) ) : '';
+		if ( ! in_array( $confirmation_action, [ 'confirm', 'cancel' ], true ) ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid confirmation action.', 'abw-ai' ) ] );
+		}
+
+		if ( 'cancel' === $confirmation_action ) {
+			self::clear_pending_confirmation( $user_id, $history_scope );
+			$message = sprintf(
+				/* translators: %s: tool name */
+				__( 'Cancelled %s.', 'abw-ai' ),
+				strtolower( str_replace( 'Confirm ', '', (string) ( $pending['title'] ?? __( 'pending action', 'abw-ai' ) ) ) )
+			);
+			self::save_to_history( $user_id, 'assistant', $message, $history_scope );
+			wp_send_json_success( [
+				'status'   => 'done',
+				'response' => $message,
+			] );
+		}
+
+		$result = ABW_AI_Router::execute_tool(
+			$pending['tool'],
+			is_array( $pending['arguments'] ?? null ) ? $pending['arguments'] : [],
+			[
+				'confirmed' => true,
+				'source'    => 'confirmation',
+				'user_id'   => $user_id,
+			]
+		);
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error(
+				[
+					'message'      => $result->get_error_message(),
+					'confirmation' => $pending,
+				],
+				(int) ( $result->get_error_data()['status'] ?? 400 )
+			);
+		}
+
+		self::clear_pending_confirmation( $user_id, $history_scope );
+
+		$block_actions = [];
+		if ( is_array( $result ) && ! empty( $result['__block_actions'] ) ) {
+			$block_actions = $result['__block_actions'];
+			unset( $result['__block_actions'] );
+		}
+
+		$tool_results = [
+			[
+				'tool'   => $pending['tool'],
+				'result' => $result,
+			],
+		];
+
+		$response = self::format_tool_results_for_response( $tool_results );
+		if ( '' === trim( $response ) ) {
+			$response = __( 'Action completed successfully.', 'abw-ai' );
+		}
+
+		self::save_to_history( $user_id, 'assistant', $response, $history_scope );
+
+		wp_send_json_success(
+			[
+				'status'       => 'done',
+				'response'     => $response,
+				'tool_results' => $tool_results,
+				'block_actions' => $block_actions,
+			]
+		);
+	}
+
+	/**
+	 * Run the agentic loop to completion.
+	 *
+	 * Used by background jobs so they share the same reasoning loop as live chat.
+	 *
+	 * @param array  $messages                Conversation messages.
+	 * @param array  $tools                   Available tools.
+	 * @param string $provider                Active provider.
+	 * @param int    $user_id                 Acting user ID.
+	 * @param bool   $allow_background_queue  Whether long tasks may be re-queued.
+	 * @return array|WP_Error
+	 */
+	public static function run_agentic_until_complete( array $messages, array $tools, string $provider, int $user_id, bool $allow_background_queue = true ) {
+		$current_messages  = $messages;
+		$combined_steps    = [];
+		$combined_actions  = [];
+		$combined_jobs     = [];
+		$combined_results  = [];
+		$confirmation      = null;
+		$response          = [ 'content' => '', 'tool_calls' => [] ];
+
+		for ( $iteration = 1; $iteration <= self::AGENTIC_MAX_ITERATIONS; $iteration++ ) {
+			$result = self::run_agentic_iteration( $current_messages, $tools, $provider, $user_id, $allow_background_queue );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			$response         = $result['response'];
+			$current_messages = $result['messages'];
+			$combined_steps   = array_merge( $combined_steps, $result['steps'] ?? [] );
+			$combined_actions = array_merge( $combined_actions, $result['block_actions'] ?? [] );
+			$combined_jobs    = array_merge( $combined_jobs, $result['background_jobs'] ?? [] );
+			$combined_results = array_merge( $combined_results, $result['all_tool_results'] ?? [] );
+			$confirmation     = $result['confirmation'] ?? null;
+
+			if ( ! empty( $combined_jobs ) || ! empty( $confirmation ) || empty( $response['tool_calls'] ) ) {
+				break;
+			}
+		}
+
+		return [
+			'response'         => $response,
+			'messages'         => $current_messages,
+			'steps'            => $combined_steps,
+			'block_actions'    => $combined_actions,
+			'background_jobs'  => $combined_jobs,
+			'all_tool_results' => $combined_results,
+			'confirmation'     => $confirmation,
+		];
+	}
+
+	/**
 	 * Run one agentic iteration: AI call + tool execution.
 	 *
 	 * @param array  $messages Messages for AI.
 	 * @param array  $tools    Available tools.
 	 * @param string $provider AI provider.
 	 * @param int    $user_id  User ID.
-	 * @return array|WP_Error Keys: response, messages, steps, block_actions, background_jobs, iteration, all_tool_results.
+	 * @return array|WP_Error Keys: response, messages, steps, block_actions, background_jobs, iteration, all_tool_results, confirmation.
 	 */
-	private static function run_agentic_iteration( array $messages, array $tools, string $provider, int $user_id ) {
+	private static function run_agentic_iteration( array $messages, array $tools, string $provider, int $user_id, bool $allow_background_queue = true ) {
 		ABW_Debug_Log::log( 'ai_iteration_start', [ 'provider' => $provider, 'messages_count' => count( $messages ), 'tools_count' => count( $tools ) ], 'Running AI iteration' );
 
 		$options  = [ 'provider' => $provider ];
@@ -807,6 +1009,7 @@ class ABW_Chat_Interface {
 		$block_actions    = [];
 		$background_jobs  = [];
 		$all_tool_results = [];
+		$confirmation     = null;
 		$iteration        = 1;
 
 		if ( ! empty( $response['content'] ) ) {
@@ -822,12 +1025,13 @@ class ABW_Chat_Interface {
 				'background_jobs'   => [],
 				'iteration'         => 1,
 				'all_tool_results'  => [],
+				'confirmation'      => null,
 			];
 		}
 
 		$tool_results_for_ai = [];
 		$has_background = self::has_background_tool_call( $response['tool_calls'] );
-		$queue_background = $has_background && class_exists( 'ABW_Background_Jobs' );
+		$queue_background = $allow_background_queue && $has_background && class_exists( 'ABW_Background_Jobs' );
 
 		if ( $queue_background ) {
 			ABW_Debug_Log::log( 'tool_queue_background', [ 'tool_names' => array_column( $response['tool_calls'], 'name' ) ], 'Queuing long-running tool(s) as background job' );
@@ -861,6 +1065,7 @@ class ABW_Chat_Interface {
 					'background_jobs'   => $background_jobs,
 					'iteration'         => 1,
 					'all_tool_results' => $all_tool_results,
+					'confirmation'     => null,
 				];
 			}
 		}
@@ -869,7 +1074,32 @@ class ABW_Chat_Interface {
 			$steps[] = [ 'type' => 'tool_call', 'name' => $tool_call['name'], 'args' => $tool_call['arguments'] ?? [] ];
 			ABW_Debug_Log::log( 'tool_call', [ 'name' => $tool_call['name'], 'arguments' => $tool_call['arguments'] ?? [] ], 'Executing tool' );
 
-			$result = ABW_AI_Router::execute_tool( $tool_call['name'], $tool_call['arguments'] ?? [] );
+			$result = ABW_AI_Router::execute_tool(
+				$tool_call['name'],
+				$tool_call['arguments'] ?? [],
+				[
+					'source'  => 'chat',
+					'user_id' => $user_id,
+				]
+			);
+
+			if ( ! is_wp_error( $result ) && is_array( $result ) && ! empty( $result['__abw_requires_confirmation'] ) ) {
+				$confirmation = $result['__abw_requires_confirmation'];
+				$steps[]      = [ 'type' => 'confirmation_required', 'name' => $tool_call['name'], 'result' => $confirmation ];
+				$response['tool_calls'] = [];
+				$response['content']    = $confirmation['message'] ?? __( 'This action needs your confirmation before it can run.', 'abw-ai' );
+
+				return [
+					'response'         => $response,
+					'messages'         => $messages,
+					'steps'            => $steps,
+					'block_actions'    => $block_actions,
+					'background_jobs'  => [],
+					'iteration'        => 1,
+					'all_tool_results' => $all_tool_results,
+					'confirmation'     => $confirmation,
+				];
+			}
 
 			$block_actions_part = [];
 			if ( ! is_wp_error( $result ) && is_array( $result ) && ! empty( $result['__block_actions'] ) ) {
@@ -932,6 +1162,7 @@ class ABW_Chat_Interface {
 				'background_jobs'   => [],
 				'iteration'         => 1,
 				'all_tool_results'  => $all_tool_results,
+				'confirmation'      => null,
 			];
 		}
 
@@ -952,6 +1183,7 @@ class ABW_Chat_Interface {
 			'background_jobs'   => [],
 			'iteration'         => 1,
 			'all_tool_results'  => $all_tool_results,
+			'confirmation'      => $confirmation,
 		];
 	}
 
@@ -992,8 +1224,9 @@ class ABW_Chat_Interface {
 
 		// Store all data needed to re-execute the job.
 		$input_data = [
-			'messages'   => $messages,
-			'tools'      => $tools,
+			'messages'     => $messages,
+			'tools'        => $tools,
+			'provider'     => ABW_AI_Router::get_provider(),
 			'user_message' => $message,
 		];
 
@@ -1128,85 +1361,13 @@ class ABW_Chat_Interface {
 	 * }
 	 */
 	private static function maybe_auto_empty_trash_posts( array $messages, array $tool_calls, array $all_tool_results ): array {
-		$default = [
+		unset( $messages, $tool_calls, $all_tool_results );
+
+		// Destructive follow-up actions now require an explicit approval step.
+		return [
 			'did_auto_delete' => false,
 			'post_ids'        => [],
 			'result'          => [],
-		];
-
-		if ( ! self::message_requests_empty_trash( $messages ) ) {
-			return $default;
-		}
-
-		if ( ! self::tool_calls_only_list_trashed_posts( $tool_calls ) ) {
-			return $default;
-		}
-
-		$post_ids = [];
-		$pages    = 1;
-		$base_args = self::get_first_trash_list_args( $tool_calls );
-		foreach ( $all_tool_results as $entry ) {
-			if ( ( $entry['tool'] ?? '' ) !== 'list_posts' || ! is_array( $entry['result'] ?? null ) ) {
-				continue;
-			}
-			if ( isset( $entry['result']['pages'] ) ) {
-				$pages = max( 1, (int) $entry['result']['pages'] );
-			}
-			$post_ids = array_merge( $post_ids, self::extract_post_ids_from_list_result( $entry['result'] ) );
-		}
-
-		if ( ! empty( $base_args ) && $pages > 1 ) {
-			for ( $page = 2; $page <= $pages; $page++ ) {
-				$page_args         = $base_args;
-				$page_args['page'] = $page;
-
-				$page_result = ABW_AI_Router::execute_tool( 'list_posts', $page_args );
-				if ( is_wp_error( $page_result ) || ! is_array( $page_result ) ) {
-					break;
-				}
-
-				$post_ids = array_merge( $post_ids, self::extract_post_ids_from_list_result( $page_result ) );
-			}
-		}
-
-		$post_ids = array_values( array_unique( array_map( 'intval', $post_ids ) ) );
-
-		if ( empty( $post_ids ) ) {
-			return [
-				'did_auto_delete' => true,
-				'post_ids'        => [],
-				'result'          => [
-					'deleted'       => 0,
-					'total'         => 0,
-					'auto_followup' => true,
-				],
-			];
-		}
-
-		$delete_result = ABW_AI_Router::execute_tool(
-			'bulk_delete_posts',
-			[
-				'post_ids' => $post_ids,
-				'force'    => true,
-			]
-		);
-
-		if ( is_wp_error( $delete_result ) ) {
-			return [
-				'did_auto_delete' => false,
-				'post_ids'        => [],
-				'result'          => [],
-			];
-		}
-
-		if ( is_array( $delete_result ) ) {
-			$delete_result['auto_followup'] = true;
-		}
-
-		return [
-			'did_auto_delete' => true,
-			'post_ids'        => $post_ids,
-			'result'          => is_array( $delete_result ) ? $delete_result : [ 'deleted' => 0, 'total' => count( $post_ids ), 'auto_followup' => true ],
 		];
 	}
 
@@ -1706,9 +1867,15 @@ class ABW_Chat_Interface {
 		}
 
 		$user_id = get_current_user_id();
-		$history = self::get_user_history( $user_id );
+		$history_scope = self::sanitize_history_scope( isset( $_POST['history_scope'] ) ? sanitize_key( wp_unslash( $_POST['history_scope'] ) ) : 'global' );
+		$history = self::get_user_history( $user_id, $history_scope );
 
-		wp_send_json_success( [ 'history' => $history ] );
+		wp_send_json_success(
+			[
+				'history'       => $history,
+				'confirmation'  => self::get_pending_confirmation( $user_id, $history_scope ),
+			]
+		);
 	}
 
 	/**
@@ -1722,7 +1889,12 @@ class ABW_Chat_Interface {
 		}
 
 		$user_id = get_current_user_id();
-		delete_user_meta( $user_id, 'abw_chat_history' );
+		$history_scope = self::sanitize_history_scope( isset( $_POST['history_scope'] ) ? sanitize_key( wp_unslash( $_POST['history_scope'] ) ) : 'global' );
+		delete_user_meta( $user_id, self::get_history_meta_key( $history_scope ) );
+		if ( 'global' === $history_scope ) {
+			delete_user_meta( $user_id, 'abw_chat_history' );
+		}
+		self::clear_pending_confirmation( $user_id, $history_scope );
 
 		wp_send_json_success( [ 'message' => __( 'Chat history cleared.', 'abw-ai' ) ] );
 	}
@@ -1733,9 +1905,47 @@ class ABW_Chat_Interface {
 	 * @param int $user_id User ID
 	 * @return array
 	 */
-	private static function get_user_history( int $user_id ): array {
-		$history = get_user_meta( $user_id, 'abw_chat_history', true );
+	private static function get_user_history( int $user_id, string $history_scope = 'global' ): array {
+		$history = get_user_meta( $user_id, self::get_history_meta_key( $history_scope ), true );
+		if ( ! is_array( $history ) && 'global' === $history_scope ) {
+			$history = get_user_meta( $user_id, 'abw_chat_history', true );
+		}
 		return is_array( $history ) ? $history : [];
+	}
+
+	/**
+	 * Summarize older history into compact memory bullets.
+	 *
+	 * @param array $history Stored chat history.
+	 * @return string
+	 */
+	private static function summarize_history_context( array $history ): string {
+		if ( count( $history ) <= 8 ) {
+			return '';
+		}
+
+		$older_entries = array_slice( $history, 0, -8 );
+		$older_entries = array_slice( $older_entries, -12 );
+		$lines         = [];
+
+		foreach ( $older_entries as $entry ) {
+			$role = ( 'user' === ( $entry['role'] ?? '' ) ) ? 'User' : 'Assistant';
+			$text = wp_strip_all_tags( (string) ( $entry['content'] ?? '' ) );
+			$text = preg_replace( '/\s+/', ' ', $text );
+			$text = trim( (string) $text );
+
+			if ( '' === $text ) {
+				continue;
+			}
+
+			if ( strlen( $text ) > 140 ) {
+				$text = substr( $text, 0, 137 ) . '...';
+			}
+
+			$lines[] = sprintf( '- %s: %s', $role, $text );
+		}
+
+		return implode( "\n", $lines );
 	}
 
 	/**
@@ -1745,8 +1955,8 @@ class ABW_Chat_Interface {
 	 * @param string $role    Message role (user/assistant)
 	 * @param string $content Message content
 	 */
-	private static function save_to_history( int $user_id, string $role, string $content ): void {
-		$history = self::get_user_history( $user_id );
+	private static function save_to_history( int $user_id, string $role, string $content, string $history_scope = 'global' ): void {
+		$history = self::get_user_history( $user_id, $history_scope );
 
 		$history[] = [
 			'role'      => $role,
@@ -1759,6 +1969,67 @@ class ABW_Chat_Interface {
 			$history = array_slice( $history, -100 );
 		}
 
-		update_user_meta( $user_id, 'abw_chat_history', $history );
+		update_user_meta( $user_id, self::get_history_meta_key( $history_scope ), $history );
+	}
+
+	/**
+	 * Get a user's pending confirmation payload.
+	 *
+	 * @param int $user_id User ID.
+	 * @return array
+	 */
+	private static function get_pending_confirmation( int $user_id, string $history_scope = 'global' ): array {
+		$pending = get_user_meta( $user_id, self::get_confirmation_meta_key( $history_scope ), true );
+		return is_array( $pending ) ? $pending : [];
+	}
+
+	/**
+	 * Store a pending confirmation payload.
+	 *
+	 * @param int   $user_id User ID.
+	 * @param array $pending Pending confirmation data.
+	 */
+	private static function set_pending_confirmation( int $user_id, array $pending, string $history_scope = 'global' ): void {
+		update_user_meta( $user_id, self::get_confirmation_meta_key( $history_scope ), $pending );
+	}
+
+	/**
+	 * Clear a user's pending confirmation payload.
+	 *
+	 * @param int $user_id User ID.
+	 */
+	private static function clear_pending_confirmation( int $user_id, string $history_scope = 'global' ): void {
+		delete_user_meta( $user_id, self::get_confirmation_meta_key( $history_scope ) );
+	}
+
+	/**
+	 * Build a per-surface history meta key.
+	 *
+	 * @param string $history_scope History scope identifier.
+	 * @return string
+	 */
+	private static function get_history_meta_key( string $history_scope ): string {
+		return 'abw_chat_history_' . self::sanitize_history_scope( $history_scope );
+	}
+
+	/**
+	 * Build a per-surface confirmation meta key.
+	 *
+	 * @param string $history_scope History scope identifier.
+	 * @return string
+	 */
+	private static function get_confirmation_meta_key( string $history_scope ): string {
+		return self::PENDING_CONFIRMATION_META_KEY . '_' . self::sanitize_history_scope( $history_scope );
+	}
+
+	/**
+	 * Normalize history scopes to a safe key.
+	 *
+	 * @param string $history_scope Raw history scope.
+	 * @return string
+	 */
+	private static function sanitize_history_scope( string $history_scope ): string {
+		$history_scope = strtolower( preg_replace( '/[^a-z0-9_-]+/', '_', $history_scope ) );
+		return '' !== $history_scope ? substr( $history_scope, 0, 80 ) : 'global';
 	}
 }

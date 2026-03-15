@@ -11,7 +11,9 @@
 	const state = {
 		isOpen: false,
 		isLoading: false,
+		isConfirming: false,
 		history: [],
+		pendingConfirmation: null,
 		activeJobs: {},     // job_token => { interval, $element }
 		agentPollInterval: null,
 		agentPollTimeout: null,
@@ -45,6 +47,8 @@
 		if (shouldBeOpen) {
 			toggleSidebar(true, false); // Open without animation on load
 		}
+
+		restoreAgentMode();
 
 		bindEvents();
 		loadHistory();
@@ -88,6 +92,19 @@
 			$('.abw-follow-ups').remove();
 			$input.val(prompt);
 			sendMessage();
+		});
+
+		$('#abw-agent-mode').on('change', function() {
+			try {
+				localStorage.setItem('abw_agent_mode', $(this).val());
+			} catch (e) {
+				// localStorage not available
+			}
+		});
+
+		// Sensitive action confirmation buttons
+		$(document).on('click', '.abw-confirmation-btn', function() {
+			handleConfirmationAction($(this).data('action'));
 		});
 
 
@@ -199,7 +216,9 @@
 				action: 'abw_chat_message',
 				nonce: abwChat.nonce,
 				message: message,
-				context: JSON.stringify(abwChat.currentPage)
+				context: JSON.stringify(abwChat.currentPage),
+				agent_mode: getSelectedAgentMode(),
+				history_scope: getHistoryScope()
 			},
 			success: function(response) {
 				if (response.success) {
@@ -235,18 +254,21 @@
 						content = 'Task completed.';
 					}
 					addMessage('assistant', content);
+					renderPendingConfirmation(response.data.confirmation || null);
 				} else {
 					hideTypingIndicator();
 					state.isLoading = false;
 					stopAgentPolling();
-					addErrorMessage(response.data.message || abwChat.i18n.error);
+					renderPendingConfirmation(response.data && response.data.confirmation ? response.data.confirmation : null);
+					addErrorMessage(response.data && response.data.message ? response.data.message : abwChat.i18n.error);
 				}
 			},
-			error: function() {
+			error: function(xhr) {
 				hideTypingIndicator();
 				state.isLoading = false;
 				stopAgentPolling();
-				addErrorMessage(abwChat.i18n.error);
+				renderPendingConfirmation(getAjaxErrorConfirmation(xhr));
+				addErrorMessage(getAjaxErrorMessage(xhr, abwChat.i18n.error));
 			}
 		});
 	}
@@ -310,6 +332,152 @@
 
 		$messages.append($error);
 		scrollToBottom();
+	}
+
+	/**
+	 * Render or clear the pending confirmation card.
+	 */
+	function renderPendingConfirmation(confirmation) {
+		state.pendingConfirmation = confirmation || null;
+		$('.abw-confirmation-message').remove();
+
+		if (!state.pendingConfirmation) {
+			return;
+		}
+
+		const details = Array.isArray(state.pendingConfirmation.details)
+			? state.pendingConfirmation.details.map(function(detail) {
+				return `<li>${escapeHtml(detail)}</li>`;
+			}).join('')
+			: '';
+
+		const $message = $(`
+			<div class="abw-message abw-message-assistant abw-confirmation-message">
+				<div class="abw-message-avatar">${ABW_ICON}</div>
+				<div class="abw-message-content">
+					<div class="abw-confirmation-card">
+						<strong>${escapeHtml(state.pendingConfirmation.title || 'Confirmation required')}</strong>
+						<p>${escapeHtml(state.pendingConfirmation.message || 'Please confirm this action.')}</p>
+						${details ? `<ul class="abw-confirmation-details">${details}</ul>` : ''}
+						<div class="abw-confirmation-actions">
+							<button class="abw-confirmation-btn button button-primary" data-action="confirm">${escapeHtml(state.pendingConfirmation.confirm_label || 'Confirm')}</button>
+							<button class="abw-confirmation-btn button" data-action="cancel">${escapeHtml(state.pendingConfirmation.cancel_label || 'Cancel')}</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		`);
+
+		$messages.append($message);
+		scrollToBottom();
+	}
+
+	/**
+	 * Confirm or cancel a pending sensitive action.
+	 */
+	function handleConfirmationAction(action) {
+		if (!state.pendingConfirmation || state.isConfirming) {
+			return;
+		}
+
+		state.isConfirming = true;
+		$('.abw-confirmation-btn').prop('disabled', true);
+
+		$.ajax({
+			url: abwChat.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'abw_confirmation_action',
+				nonce: abwChat.nonce,
+				confirmation_action: action,
+				history_scope: getHistoryScope()
+			},
+			success: function(response) {
+				state.isConfirming = false;
+				if (!response.success) {
+					$('.abw-confirmation-btn').prop('disabled', false);
+					renderPendingConfirmation(response.data && response.data.confirmation ? response.data.confirmation : state.pendingConfirmation);
+					addErrorMessage(response.data && response.data.message ? response.data.message : abwChat.i18n.error);
+					return;
+				}
+
+				renderPendingConfirmation(null);
+
+				if (
+					abwChat &&
+					abwChat.debugToolResults &&
+					response.data.tool_results &&
+					response.data.tool_results.length > 0
+				) {
+					response.data.tool_results.forEach(function(result) {
+						addToolResult(result.tool, result.result);
+					});
+				}
+
+				addMessage('assistant', response.data.response || (action === 'cancel' ? 'Action cancelled.' : 'Action completed.'));
+			},
+			error: function(xhr) {
+				state.isConfirming = false;
+				$('.abw-confirmation-btn').prop('disabled', false);
+				renderPendingConfirmation(getAjaxErrorConfirmation(xhr) || state.pendingConfirmation);
+				addErrorMessage(getAjaxErrorMessage(xhr, abwChat.i18n.error));
+			}
+		});
+	}
+
+	/**
+	 * Extract the best available AJAX error message.
+	 */
+	function getAjaxErrorMessage(xhr, fallback) {
+		const message = xhr && xhr.responseJSON && xhr.responseJSON.data ? xhr.responseJSON.data.message : '';
+		return message && String(message).trim() ? message : fallback;
+	}
+
+	/**
+	 * Extract a pending confirmation payload from a failed AJAX response.
+	 */
+	function getAjaxErrorConfirmation(xhr) {
+		return xhr && xhr.responseJSON && xhr.responseJSON.data
+			? xhr.responseJSON.data.confirmation || null
+			: null;
+	}
+
+	/**
+	 * Restore the selected agent mode from local storage.
+	 */
+	function restoreAgentMode() {
+		const $select = $('#abw-agent-mode');
+		if (!$select.length) {
+			return;
+		}
+
+		let savedMode = abwChat.defaultAgentMode || 'general';
+		try {
+			savedMode = localStorage.getItem('abw_agent_mode') || savedMode;
+		} catch (e) {
+			// localStorage not available
+		}
+
+		$select.val(savedMode);
+	}
+
+	/**
+	 * Get the currently selected agent mode.
+	 */
+	function getSelectedAgentMode() {
+		const $select = $('#abw-agent-mode');
+		return $select.length ? $select.val() : (abwChat.defaultAgentMode || 'general');
+	}
+
+	/**
+	 * Build a scoped history key for the current surface.
+	 */
+	function getHistoryScope() {
+		const page = abwChat.currentPage || {};
+		if (page.post_id) {
+			return `admin_${page.screen || page.page || 'page'}_${page.post_id}`;
+		}
+		return `admin_${page.screen || page.page || 'global'}`;
 	}
 
 	/**
@@ -426,22 +594,25 @@
 						} else {
 							addMessage('assistant', content);
 						}
+						renderPendingConfirmation(response.data.confirmation || null);
 						return;
 					}
 					if (response.data.status === 'error') {
 						stopAgentPolling();
 						hideTypingIndicator();
 						state.isLoading = false;
+						renderPendingConfirmation(response.data.confirmation || null);
 						addErrorMessage(response.data.response || abwChat.i18n.error);
 						return;
 					}
 				},
-				error: function() {
+				error: function(xhr) {
 					state.agentPollInFlight = false;
 					stopAgentPolling();
 					hideTypingIndicator();
 					state.isLoading = false;
-					addErrorMessage(abwChat.i18n.error);
+					renderPendingConfirmation(getAjaxErrorConfirmation(xhr));
+					addErrorMessage(getAjaxErrorMessage(xhr, abwChat.i18n.error));
 				}
 			});
 		}
@@ -715,7 +886,8 @@
 			method: 'POST',
 			data: {
 				action: 'abw_chat_history',
-				nonce: abwChat.nonce
+				nonce: abwChat.nonce,
+				history_scope: getHistoryScope()
 			},
 			success: function(response) {
 				if (response.success && response.data.history && response.data.history.length > 0) {
@@ -727,6 +899,7 @@
 						addMessage(msg.role, msg.content);
 					});
 				}
+				renderPendingConfirmation(response.data && response.data.confirmation ? response.data.confirmation : null);
 			}
 		});
 	}
@@ -744,10 +917,12 @@
 			method: 'POST',
 			data: {
 				action: 'abw_clear_chat',
-				nonce: abwChat.nonce
+				nonce: abwChat.nonce,
+				history_scope: getHistoryScope()
 			},
 			success: function(response) {
 				if (response.success) {
+					renderPendingConfirmation(null);
 					// Clear messages and show welcome
 				$messages.html(`
 					<div class="abw-chat-welcome">

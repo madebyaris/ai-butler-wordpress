@@ -662,7 +662,7 @@ class ABW_AI_Router
      * @param array  $arguments Tool arguments
      * @return array|WP_Error
      */
-    public static function execute_tool(string $tool_name, array $arguments)
+    public static function execute_tool(string $tool_name, array $arguments, array $context = [])
     {
         // Map tool names to internal REST API endpoints or ability callbacks
         $tool_mapping = [
@@ -828,6 +828,17 @@ class ABW_AI_Router
             return new WP_Error('unknown_tool', sprintf(__('Unknown tool: %s', 'abw-ai'), $tool_name));
         }
 
+        $permission_check = self::authorize_tool_execution($tool_name);
+        if (is_wp_error($permission_check)) {
+            return $permission_check;
+        }
+
+        if (self::tool_requires_confirmation($tool_name, $arguments, $context)) {
+            return [
+                '__abw_requires_confirmation' => self::build_confirmation_request($tool_name, $arguments),
+            ];
+        }
+
         $callback = $tool_mapping[$tool_name];
 
         if (is_callable($callback)) {
@@ -835,6 +846,472 @@ class ABW_AI_Router
         }
 
         return new WP_Error('tool_not_callable', sprintf(__('Tool %s is not callable.', 'abw-ai'), $tool_name));
+    }
+
+    /**
+     * Enforce capability checks for chat, workflow, and background execution.
+     *
+     * @param string $tool_name Tool name.
+     * @return true|WP_Error
+     */
+    private static function authorize_tool_execution(string $tool_name)
+    {
+        $requirements = self::get_tool_capability_requirements($tool_name);
+        if (empty($requirements)) {
+            return true;
+        }
+
+        $caps = is_array($requirements['caps']) ? $requirements['caps'] : [ $requirements['caps'] ];
+        foreach ($caps as $cap) {
+            if ($cap && current_user_can($cap)) {
+                return true;
+            }
+        }
+
+        $label = self::humanize_tool_name($tool_name);
+        $message = $requirements['message']
+            ?? sprintf(
+                __('You do not have permission to run %s.', 'abw-ai'),
+                strtolower($label)
+            );
+
+        return new WP_Error('forbidden_tool', $message, [ 'status' => 403 ]);
+    }
+
+    /**
+     * Get capability requirements for a tool.
+     *
+     * @param string $tool_name Tool name.
+     * @return array<string, mixed>
+     */
+    private static function get_tool_capability_requirements(string $tool_name): array
+    {
+        $manage_options_tools = [
+            'create_menu',
+            'add_menu_item',
+            'update_menu_item',
+            'delete_menu_item',
+            'assign_menu_location',
+            'get_option',
+            'update_option',
+            'get_reading_settings',
+            'update_reading_settings',
+            'update_site_identity',
+            'create_workflow',
+            'list_workflows',
+            'toggle_workflow',
+            'run_workflow',
+            'get_database_stats',
+            'cleanup_database',
+            'optimize_database_tables',
+            'list_cron_jobs',
+            'delete_cron_job',
+            'list_transients',
+            'flush_transients',
+            'get_autoload_report',
+            'get_performance_report',
+            'scan_file_integrity',
+            'list_failed_logins',
+            'check_file_permissions',
+            'get_security_report',
+            'list_admin_users',
+            'check_ssl_status',
+        ];
+
+        $edit_posts_tools = [
+            'create_post',
+            'update_post',
+            'bulk_update_posts',
+            'find_replace_content',
+            'generate_post_content',
+            'improve_content',
+            'generate_seo_meta',
+            'translate_content',
+            'generate_css',
+            'suggest_color_scheme',
+            'generate_image_alt',
+            'generate_faq',
+            'generate_schema_markup',
+            'summarize_content',
+            'generate_social_posts',
+            'analyze_content_sentiment',
+            'detect_content_language',
+            'check_content_accessibility',
+            'insert_editor_blocks',
+            'replace_editor_content',
+            'update_editor_block',
+            'remove_editor_blocks',
+            'save_current_post',
+            'update_post_details',
+            'train_brand_voice',
+            'get_brand_voice',
+            'generate_product_description',
+            'rewrite_for_tone',
+            'generate_outline',
+            'expand_from_outline',
+            'generate_excerpt_ai',
+            'generate_table_of_contents',
+            'analyze_seo_score',
+            'suggest_internal_links',
+            'generate_slug',
+            'check_broken_links',
+            'detect_and_translate_post',
+            'bulk_translate_posts',
+            'manage_translations',
+            'get_content_calendar',
+            'get_publishing_stats',
+            'get_comment_stats',
+            'generate_site_report',
+            'update_elementor_page',
+        ];
+
+        $read_tools = [
+            'list_posts',
+            'get_post',
+            'list_taxonomies',
+            'list_terms',
+            'list_block_patterns',
+            'list_template_parts',
+            'search_site',
+            'get_post_stats',
+            'get_popular_content',
+            'get_recent_activity',
+            'get_site_info',
+            'get_site_health',
+            'check_plugin_updates',
+            'check_theme_updates',
+            'list_elementor_pages',
+            'get_elementor_page',
+            'list_elementor_templates',
+        ];
+
+        if (in_array($tool_name, $read_tools, true)) {
+            return [
+                'caps'    => 'read',
+                'message' => __('You need basic site access to run this tool.', 'abw-ai'),
+            ];
+        }
+
+        if (in_array($tool_name, $edit_posts_tools, true)) {
+            return [
+                'caps'    => 'edit_posts',
+                'message' => __('You need permission to edit content before running this tool.', 'abw-ai'),
+            ];
+        }
+
+        if (in_array($tool_name, $manage_options_tools, true)) {
+            return [
+                'caps'    => 'manage_options',
+                'message' => __('You need administrator access to run this site-management tool.', 'abw-ai'),
+            ];
+        }
+
+        switch ($tool_name) {
+            case 'delete_post':
+            case 'bulk_delete_posts':
+                return [
+                    'caps'    => 'delete_posts',
+                    'message' => __('You need permission to delete posts before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_comments':
+            case 'moderate_comment':
+            case 'bulk_moderate_comments':
+                return [
+                    'caps'    => 'moderate_comments',
+                    'message' => __('You need permission to moderate comments before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_users':
+            case 'get_user':
+            case 'update_user':
+                return [
+                    'caps'    => 'edit_users',
+                    'message' => __('You need permission to manage users before running this tool.', 'abw-ai'),
+                ];
+
+            case 'create_user':
+                return [
+                    'caps'    => 'create_users',
+                    'message' => __('You need permission to create users before running this tool.', 'abw-ai'),
+                ];
+
+            case 'delete_user':
+                return [
+                    'caps'    => 'delete_users',
+                    'message' => __('You need permission to delete users before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_media':
+            case 'upload_media':
+            case 'update_media':
+            case 'delete_media':
+                return [
+                    'caps'    => 'upload_files',
+                    'message' => __('You need permission to manage media before running this tool.', 'abw-ai'),
+                ];
+
+            case 'create_term':
+            case 'update_term':
+            case 'delete_term':
+                return [
+                    'caps'    => 'manage_categories',
+                    'message' => __('You need permission to manage categories and terms before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_menus':
+            case 'get_menu':
+                return [
+                    'caps'    => 'edit_theme_options',
+                    'message' => __('You need permission to manage navigation before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_plugins':
+            case 'activate_plugin':
+            case 'deactivate_plugin':
+                return [
+                    'caps'    => 'activate_plugins',
+                    'message' => __('You need permission to manage plugins before running this tool.', 'abw-ai'),
+                ];
+
+            case 'update_plugin':
+                return [
+                    'caps'    => 'update_plugins',
+                    'message' => __('You need permission to update plugins before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_themes':
+            case 'activate_theme':
+                return [
+                    'caps'    => 'switch_themes',
+                    'message' => __('You need permission to manage themes before running this tool.', 'abw-ai'),
+                ];
+
+            case 'update_theme':
+                return [
+                    'caps'    => 'update_themes',
+                    'message' => __('You need permission to update themes before running this tool.', 'abw-ai'),
+                ];
+
+            case 'list_products':
+            case 'get_product':
+            case 'update_product':
+            case 'bulk_update_products':
+            case 'analyze_product_performance':
+            case 'list_orders':
+            case 'get_order':
+            case 'update_order_status':
+            case 'get_sales_report':
+            case 'get_customer_stats':
+            case 'create_coupon':
+            case 'list_coupons':
+                return [
+                    'caps'    => [ 'manage_woocommerce', 'manage_options' ],
+                    'message' => __('You need WooCommerce management access to run this tool.', 'abw-ai'),
+                ];
+
+            default:
+                return [
+                    'caps'    => 'manage_options',
+                    'message' => __('You need administrator access to run this tool.', 'abw-ai'),
+                ];
+        }
+    }
+
+    /**
+     * Determine whether a tool must be explicitly confirmed.
+     *
+     * @param string $tool_name Tool name.
+     * @param array  $arguments Tool arguments.
+     * @param array  $context   Execution context.
+     * @return bool
+     */
+    private static function tool_requires_confirmation(string $tool_name, array $arguments, array $context): bool
+    {
+        if (! empty($context['confirmed'])) {
+            return false;
+        }
+
+        $always_confirm = [
+            'create_user',
+            'delete_user',
+            'delete_post',
+            'bulk_delete_posts',
+            'delete_media',
+            'delete_term',
+            'delete_menu_item',
+            'activate_theme',
+            'update_plugin',
+            'update_theme',
+            'update_option',
+            'update_reading_settings',
+            'update_site_identity',
+            'cleanup_database',
+            'optimize_database_tables',
+            'delete_cron_job',
+            'flush_transients',
+            'create_coupon',
+        ];
+
+        if (in_array($tool_name, $always_confirm, true)) {
+            return true;
+        }
+
+        if ('moderate_comment' === $tool_name) {
+            $action = strtolower((string) ($arguments['status'] ?? $arguments['action'] ?? ''));
+            return in_array($action, [ 'spam', 'trash', 'delete' ], true);
+        }
+
+        if ('update_user' === $tool_name) {
+            return isset($arguments['role']) && '' !== trim((string) $arguments['role']);
+        }
+
+        if ('bulk_update_posts' === $tool_name) {
+            return ! empty($arguments['post_ids']) && count((array) $arguments['post_ids']) > 10;
+        }
+
+        if ('find_replace_content' === $tool_name) {
+            return ! empty($arguments['search']) && array_key_exists('replace', $arguments);
+        }
+
+        return false;
+    }
+
+    /**
+     * Build a user-facing confirmation request.
+     *
+     * @param string $tool_name Tool name.
+     * @param array  $arguments Tool arguments.
+     * @return array<string, mixed>
+     */
+    private static function build_confirmation_request(string $tool_name, array $arguments): array
+    {
+        $label = self::humanize_tool_name($tool_name);
+
+        return [
+            'tool'          => $tool_name,
+            'arguments'     => $arguments,
+            'title'         => sprintf(__('Confirm %s', 'abw-ai'), $label),
+            'message'       => sprintf(
+                __('ABW-AI is ready to run %s. Review the details below and confirm before anything changes.', 'abw-ai'),
+                strtolower($label)
+            ),
+            'details'       => self::summarize_tool_arguments($tool_name, $arguments),
+            'confirm_label' => __('Confirm action', 'abw-ai'),
+            'cancel_label'  => __('Cancel', 'abw-ai'),
+        ];
+    }
+
+    /**
+     * Summarize tool arguments for approval UI.
+     *
+     * @param string $tool_name Tool name.
+     * @param array  $arguments Tool arguments.
+     * @return array<int, string>
+     */
+    private static function summarize_tool_arguments(string $tool_name, array $arguments): array
+    {
+        $details = [];
+
+        switch ($tool_name) {
+            case 'create_user':
+                if (! empty($arguments['username'])) {
+                    $details[] = sprintf(__('Username: %s', 'abw-ai'), (string) $arguments['username']);
+                }
+                if (! empty($arguments['email'])) {
+                    $details[] = sprintf(__('Email: %s', 'abw-ai'), (string) $arguments['email']);
+                }
+                if (! empty($arguments['role'])) {
+                    $details[] = sprintf(__('Role: %s', 'abw-ai'), (string) $arguments['role']);
+                }
+                break;
+
+            case 'delete_user':
+            case 'delete_post':
+            case 'delete_media':
+            case 'delete_term':
+            case 'delete_menu_item':
+                if (isset($arguments['id'])) {
+                    $details[] = sprintf(__('Target ID: %s', 'abw-ai'), (string) $arguments['id']);
+                }
+                break;
+
+            case 'bulk_delete_posts':
+            case 'bulk_update_posts':
+                if (! empty($arguments['post_ids'])) {
+                    $ids = array_map('intval', (array) $arguments['post_ids']);
+                    $details[] = sprintf(__('Post count: %d', 'abw-ai'), count($ids));
+                    $details[] = sprintf(__('Post IDs: %s', 'abw-ai'), implode(', ', array_slice($ids, 0, 15)));
+                }
+                break;
+
+            case 'update_plugin':
+            case 'activate_plugin':
+            case 'deactivate_plugin':
+                if (! empty($arguments['plugin'])) {
+                    $details[] = sprintf(__('Plugin: %s', 'abw-ai'), (string) $arguments['plugin']);
+                }
+                break;
+
+            case 'activate_theme':
+            case 'update_theme':
+                if (! empty($arguments['stylesheet'])) {
+                    $details[] = sprintf(__('Theme: %s', 'abw-ai'), (string) $arguments['stylesheet']);
+                }
+                break;
+
+            case 'update_option':
+                if (! empty($arguments['option_name'])) {
+                    $details[] = sprintf(__('Option: %s', 'abw-ai'), (string) $arguments['option_name']);
+                }
+                break;
+
+            case 'update_site_identity':
+                if (isset($arguments['title'])) {
+                    $details[] = sprintf(__('Site title: %s', 'abw-ai'), (string) $arguments['title']);
+                }
+                if (isset($arguments['tagline'])) {
+                    $details[] = sprintf(__('Tagline: %s', 'abw-ai'), (string) $arguments['tagline']);
+                }
+                break;
+
+            case 'update_reading_settings':
+                foreach ([ 'show_on_front', 'page_on_front', 'page_for_posts', 'posts_per_page' ] as $field) {
+                    if (isset($arguments[$field])) {
+                        $details[] = sprintf('%s: %s', $field, is_scalar($arguments[$field]) ? (string) $arguments[$field] : wp_json_encode($arguments[$field]));
+                    }
+                }
+                break;
+
+            default:
+                foreach ($arguments as $key => $value) {
+                    if (is_array($value)) {
+                        $encoded = wp_json_encode($value);
+                        $details[] = sprintf('%s: %s', $key, strlen((string) $encoded) > 120 ? substr((string) $encoded, 0, 117) . '...' : $encoded);
+                    } elseif (is_scalar($value) && '' !== trim((string) $value)) {
+                        $string_value = (string) $value;
+                        $details[] = sprintf('%s: %s', $key, strlen($string_value) > 120 ? substr($string_value, 0, 117) . '...' : $string_value);
+                    }
+                }
+                break;
+        }
+
+        if (empty($details)) {
+            $details[] = __('No extra details were provided for this action.', 'abw-ai');
+        }
+
+        return $details;
+    }
+
+    /**
+     * Convert a tool slug to a human-readable label.
+     *
+     * @param string $tool_name Tool name.
+     * @return string
+     */
+    private static function humanize_tool_name(string $tool_name): string
+    {
+        return ucwords(str_replace('_', ' ', $tool_name));
     }
 
     // =========================================================================
@@ -1022,7 +1499,7 @@ class ABW_AI_Router
      *
      * @return array
      */
-    public static function get_available_tools(): array
+    public static function get_available_tools(string $agent_mode = 'general'): array
     {
         $tools = [
             // Posts
@@ -1670,7 +2147,100 @@ class ABW_AI_Router
             'parameters'  => ['type' => 'object', 'properties' => new \stdClass()],
         ];
 
-        return $tools;
+        return self::filter_tools_for_agent_mode($tools, $agent_mode);
+    }
+
+    /**
+     * Return the available agent packages for the chat UI.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function get_agent_packages(): array
+    {
+        return [
+            'general' => [
+                'label'        => __('General', 'abw-ai'),
+                'description'  => __('Use the full ABW-AI toolset across content, operations, and maintenance.', 'abw-ai'),
+                'instructions' => 'Use the full toolset and pick the best tools for the user request.',
+                'tools'        => [],
+            ],
+            'siteops' => [
+                'label'        => __('SiteOps', 'abw-ai'),
+                'description'  => __('Focus on plugins, themes, options, updates, and performance operations.', 'abw-ai'),
+                'instructions' => 'Prioritize site operations, diagnostics, updates, and settings changes.',
+                'tools'        => [ 'list_plugins', 'activate_plugin', 'deactivate_plugin', 'update_plugin', 'list_themes', 'activate_theme', 'update_theme', 'get_site_info', 'get_site_health', 'check_plugin_updates', 'check_theme_updates', 'update_site_identity', 'get_option', 'update_option', 'get_reading_settings', 'update_reading_settings', 'list_menus', 'get_menu', 'create_menu', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'assign_menu_location', 'get_database_stats', 'cleanup_database', 'optimize_database_tables', 'list_cron_jobs', 'delete_cron_job', 'list_transients', 'flush_transients', 'get_autoload_report', 'get_performance_report' ],
+            ],
+            'content' => [
+                'label'        => __('Content', 'abw-ai'),
+                'description'  => __('Focus on writing, rewriting, SEO, translation, and post/page management.', 'abw-ai'),
+                'instructions' => 'Prioritize content production, post management, SEO, translation, and media preparation.',
+                'tools'        => [ 'list_posts', 'get_post', 'create_post', 'update_post', 'delete_post', 'bulk_update_posts', 'bulk_delete_posts', 'find_replace_content', 'list_media', 'upload_media', 'update_media', 'delete_media', 'generate_post_content', 'improve_content', 'generate_seo_meta', 'translate_content', 'generate_image_alt', 'generate_faq', 'generate_schema_markup', 'summarize_content', 'generate_social_posts', 'analyze_content_sentiment', 'detect_content_language', 'check_content_accessibility', 'generate_product_description', 'rewrite_for_tone', 'generate_outline', 'expand_from_outline', 'generate_excerpt_ai', 'generate_table_of_contents', 'analyze_seo_score', 'suggest_internal_links', 'generate_slug', 'check_broken_links', 'detect_and_translate_post', 'bulk_translate_posts', 'manage_translations' ],
+            ],
+            'editor' => [
+                'label'        => __('Editor/Page', 'abw-ai'),
+                'description'  => __('Focus on Gutenberg and Elementor page-building workflows.', 'abw-ai'),
+                'instructions' => 'Prioritize block editor and page-building tasks. Use editor-specific tools before general post tools when available.',
+                'tools'        => [ 'list_posts', 'get_post', 'update_post', 'list_media', 'upload_media', 'update_media', 'insert_editor_blocks', 'replace_editor_content', 'update_editor_block', 'remove_editor_blocks', 'save_current_post', 'update_post_details', 'list_elementor_pages', 'get_elementor_page', 'update_elementor_page', 'list_elementor_templates', 'generate_post_content', 'improve_content', 'generate_css', 'suggest_color_scheme', 'generate_outline', 'expand_from_outline', 'generate_table_of_contents' ],
+            ],
+            'workflow' => [
+                'label'        => __('Workflow', 'abw-ai'),
+                'description'  => __('Focus on building, running, and reviewing repeatable automations.', 'abw-ai'),
+                'instructions' => 'Prioritize automation design, trigger selection, reusable variables, and step-by-step workflow execution.',
+                'tools'        => [ 'list_workflows', 'create_workflow', 'toggle_workflow', 'run_workflow', 'search_site', 'get_recent_activity', 'get_site_health', 'get_site_info', 'list_posts', 'get_post', 'list_comments', 'list_orders', 'get_order', 'get_content_calendar', 'generate_site_report' ],
+            ],
+            'commerce' => [
+                'label'        => __('Commerce', 'abw-ai'),
+                'description'  => __('Focus on WooCommerce catalog, order, and sales operations.', 'abw-ai'),
+                'instructions' => 'Prioritize WooCommerce products, orders, coupons, sales reporting, and catalog content.',
+                'tools'        => [ 'list_products', 'get_product', 'update_product', 'bulk_update_products', 'list_orders', 'get_order', 'update_order_status', 'get_sales_report', 'get_customer_stats', 'create_coupon', 'list_coupons', 'analyze_product_performance', 'generate_product_description' ],
+            ],
+            'security' => [
+                'label'        => __('Security', 'abw-ai'),
+                'description'  => __('Focus on security, integrity checks, maintenance, and recovery guidance.', 'abw-ai'),
+                'instructions' => 'Prioritize security posture, integrity scans, admin audits, SSL, and maintenance follow-up actions.',
+                'tools'        => [ 'get_site_health', 'check_plugin_updates', 'check_theme_updates', 'scan_file_integrity', 'list_failed_logins', 'check_file_permissions', 'get_security_report', 'list_admin_users', 'check_ssl_status', 'list_plugins', 'update_plugin', 'list_themes', 'update_theme' ],
+            ],
+            'brand' => [
+                'label'        => __('Brand/Voice', 'abw-ai'),
+                'description'  => __('Focus on tone, consistency, brand voice training, and editorial polish.', 'abw-ai'),
+                'instructions' => 'Prioritize brand consistency, voice training, rewriting, and editorial guidance.',
+                'tools'        => [ 'list_posts', 'get_post', 'train_brand_voice', 'get_brand_voice', 'improve_content', 'rewrite_for_tone', 'generate_seo_meta', 'generate_outline', 'expand_from_outline', 'generate_social_posts' ],
+            ],
+        ];
+    }
+
+    /**
+     * Filter tool definitions for the selected agent mode.
+     *
+     * @param array  $tools      Full tool list.
+     * @param string $agent_mode Selected agent mode.
+     * @return array
+     */
+    private static function filter_tools_for_agent_mode(array $tools, string $agent_mode): array
+    {
+        $agent_mode = self::normalize_agent_mode($agent_mode);
+        $packages   = self::get_agent_packages();
+        $allowed    = $packages[$agent_mode]['tools'] ?? [];
+
+        if (empty($allowed)) {
+            return $tools;
+        }
+
+        return array_values(array_filter($tools, static function ($tool) use ($allowed) {
+            return in_array($tool['name'] ?? '', $allowed, true);
+        }));
+    }
+
+    /**
+     * Normalize an agent mode to a known package key.
+     *
+     * @param string $agent_mode Requested mode.
+     * @return string
+     */
+    private static function normalize_agent_mode(string $agent_mode): string
+    {
+        $packages = self::get_agent_packages();
+        return isset($packages[$agent_mode]) ? $agent_mode : 'general';
     }
 
     /**
@@ -1679,12 +2249,14 @@ class ABW_AI_Router
      * @param string $editor_context Optional serialized block editor context.
      * @return string
      */
-    public static function get_system_prompt(string $editor_context = ''): string
+    public static function get_system_prompt(string $editor_context = '', string $agent_mode = 'general'): string
     {
         $site_name = get_bloginfo('name');
         $site_url  = home_url();
         $wp_version = get_bloginfo('version');
         $theme_name = wp_get_theme()->get('Name');
+        $agent_mode = self::normalize_agent_mode($agent_mode);
+        $agent_package = self::get_agent_packages()[$agent_mode];
 
         $has_elementor = class_exists('\Elementor\Plugin') ? 'Yes' : 'No';
 
@@ -1697,6 +2269,11 @@ Current WordPress Site:
 - WordPress Version: {$wp_version}
 - Active Theme: {$theme_name}
 - Elementor Active: {$has_elementor}
+
+Active Agent Package:
+- Mode: {$agent_package['label']}
+- Focus: {$agent_package['description']}
+- Instructions: {$agent_package['instructions']}
 
 Your capabilities:
 - POSTS & PAGES: Create, edit, update, delete, and list posts and pages with filtering
@@ -1736,7 +2313,7 @@ Execution policy:
    - ACTION: User asks to create, update, delete, publish, moderate, optimize, or configure. You MUST execute the action tools, not just describe data.
 2. Complete the full task end-to-end. If a request needs multiple steps (for example list -> filter -> delete), continue calling tools until done.
 3. Do not stop after a discovery/list step when the user asked for an action.
-4. If destructive intent is explicit and scoped (for example "delete all posts from trash"), execute directly. If scope is ambiguous, ask one concise clarification before destructive actions.
+4. High-impact changes such as deletes, user management, theme/plugin updates, and settings changes require an approval step before execution. Gather what you need, explain the impact, and let the confirmation flow handle the final approval.
 5. Never return an empty response. Always explain what happened, including counts and outcomes.
 6. Handle tool errors gracefully and propose the next best action.
 
@@ -1757,8 +2334,8 @@ High-priority runbook:
 - Request: "delete/remove/empty all posts from trash"
   1) Call `list_posts` with `status: "trash"` (paginate if needed).
   2) Collect all returned post IDs.
-  3) Call `bulk_delete_posts` with `post_ids` and `force: true`.
-  4) Respond with deleted/total counts.
+  3) Prepare `bulk_delete_posts` with `post_ids` and `force: true`; the system will ask the user to confirm before deletion.
+  4) After approval, report deleted/total counts.
 - Request: "check plugin and theme updates"
   1) Call `check_plugin_updates`.
   2) Call `check_theme_updates`.
@@ -1766,9 +2343,9 @@ High-priority runbook:
   4) Do NOT use `get_site_info` for this task.
 - Request: "update plugin and/or theme"
   1) Call `check_plugin_updates` and/or `check_theme_updates` to discover targets.
-  2) If the user asked for specific items, update only those via `update_plugin` / `update_theme`.
-  3) If the user asked to update all available items, call `update_plugin` / `update_theme` for each available update.
-  4) Report which items were updated and any failures.
+  2) If the user asked for specific items, prepare `update_plugin` / `update_theme` only for those targets.
+  3) If the user asked to update all available items, prepare `update_plugin` / `update_theme` for each available update.
+  4) Let the approval flow confirm the updates, then report which items were updated and any failures.
 
 Response style:
 - Be helpful, direct, and action-oriented.

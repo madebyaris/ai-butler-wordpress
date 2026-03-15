@@ -20,6 +20,79 @@ if (! defined('ABSPATH')) {
 class ABW_AI_Tools
 {
     /**
+     * Decode a structured JSON payload with light repair fallbacks.
+     *
+     * @param string $content Raw model output.
+     * @return array|null
+     */
+    private static function maybe_decode_json_payload(string $content)
+    {
+        $candidates = [trim($content)];
+
+        if (preg_match('/```(?:json)?\s*([\s\S]*?)```/i', $content, $matches)) {
+            $candidates[] = trim($matches[1]);
+        }
+
+        if (preg_match('/(\{[\s\S]*\}|\[[\s\S]*\])/s', $content, $matches)) {
+            $candidates[] = trim($matches[1]);
+        }
+
+        foreach ($candidates as $candidate) {
+            if ('' === $candidate) {
+                continue;
+            }
+
+            $decoded = json_decode($candidate, true);
+            if (JSON_ERROR_NONE === json_last_error() && is_array($decoded)) {
+                return $decoded;
+            }
+
+            $normalized = preg_replace('/,\s*([\]}])/m', '$1', $candidate);
+            $decoded    = json_decode((string) $normalized, true);
+            if (JSON_ERROR_NONE === json_last_error() && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        $repaired = self::repair_json_payload($content);
+        if ('' !== $repaired) {
+            $decoded = json_decode($repaired, true);
+            if (JSON_ERROR_NONE === json_last_error() && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Ask the model to repair malformed JSON into valid JSON.
+     *
+     * @param string $content Raw model output.
+     * @return string
+     */
+    private static function repair_json_payload(string $content): string
+    {
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You repair malformed JSON. Return valid JSON only with no explanation.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => "Repair this into valid JSON while preserving the original structure as closely as possible:\n\n" . $content,
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages, [], [ 'max_tokens' => 1200 ]);
+        if (is_wp_error($response)) {
+            return '';
+        }
+
+        return trim((string) ($response['content'] ?? ''));
+    }
+
+    /**
      * Generate blog post content
      *
      * @param array $input Input parameters
@@ -173,9 +246,9 @@ class ABW_AI_Tools
         }
 
         // Parse JSON response
-        $meta = json_decode($response['content'], true);
+        $meta = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($meta)) {
             // Try to extract from text
             return [
                 'seo_title'        => '',
@@ -283,9 +356,9 @@ class ABW_AI_Tools
         }
 
         // Parse JSON response
-        $elements = json_decode($response['content'], true);
+        $elements = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($elements)) {
             return new WP_Error('invalid_json', __('Failed to generate valid Elementor layout.', 'abw-ai'));
         }
 
@@ -432,9 +505,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $colors = json_decode($response['content'], true);
+        $colors = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($colors)) {
             return [
                 'raw_response' => $response['content'],
                 'colors'       => [],
@@ -528,9 +601,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $faq = json_decode($response['content'], true);
+        $faq = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($faq)) {
             return [
                 'faq'          => [],
                 'raw_response' => $response['content'],
@@ -584,15 +657,7 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $schema = json_decode($response['content'], true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            // Try to extract JSON from markdown code blocks
-            $content = $response['content'];
-            if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $content, $matches)) {
-                $schema = json_decode($matches[1], true);
-            }
-        }
+        $schema = self::maybe_decode_json_payload($response['content']);
 
         return [
             'schema' => $schema ?? [],
@@ -705,9 +770,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $posts = json_decode($response['content'], true);
+        $posts = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($posts)) {
             return [
                 'posts'         => [],
                 'raw_response' => $response['content'],
@@ -755,9 +820,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $sentiment = json_decode($response['content'], true);
+        $sentiment = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($sentiment)) {
             return [
                 'sentiment'     => 'neutral',
                 'score'         => 50,
@@ -809,9 +874,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $detection = json_decode($response['content'], true);
+        $detection = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($detection)) {
             return [
                 'language'      => 'unknown',
                 'code'         => 'unknown',
@@ -863,9 +928,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $audit = json_decode($response['content'], true);
+        $audit = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($audit)) {
             return [
                 'issues'        => [],
                 'suggestions'  => [],
@@ -931,9 +996,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $result = json_decode($response['content'], true);
+        $result = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($result)) {
             return [
                 'description'       => $response['content'],
                 'short_description' => '',
@@ -1042,9 +1107,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $outline = json_decode($response['content'], true);
+        $outline = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($outline)) {
             return [
                 'title'        => '',
                 'sections'     => [],
@@ -1264,9 +1329,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $result = json_decode($response['content'], true);
+        $result = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($result)) {
             return new WP_Error('parse_error', __('Failed to parse translation response.', 'abw-ai'));
         }
 
@@ -1758,9 +1823,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $analysis = json_decode($response['content'], true);
+        $analysis = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($analysis)) {
             return [
                 'score'             => 0,
                 'grade'             => 'N/A',
@@ -1849,9 +1914,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $suggestions = json_decode($response['content'], true);
+        $suggestions = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($suggestions)) {
             return [
                 'suggestions'  => [],
                 'raw_response' => $response['content'],
@@ -1901,9 +1966,9 @@ class ABW_AI_Tools
             return $response;
         }
 
-        $result = json_decode($response['content'], true);
+        $result = self::maybe_decode_json_payload($response['content']);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (! is_array($result)) {
             $fallback = sanitize_title($title);
             return [
                 'slug'         => $fallback,
