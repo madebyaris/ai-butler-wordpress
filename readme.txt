@@ -101,6 +101,12 @@ For Cursor or other MCP clients, add to your configuration:
 }
 ```
 
+== Screenshots ==
+
+1. ABW-AI settings screen with the live admin chat sidebar open for site management requests.
+2. Background Jobs dashboard showing job totals, queue state, and recent job outcomes.
+3. Debug Log screen with saved log files and the ABW-AI chat sidebar visible.
+
 == Frequently Asked Questions ==
 
 = Does this work without an AI API key? =

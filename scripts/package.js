@@ -25,6 +25,7 @@ const ignoredNames = new Set([
   'scripts',
   'src',
   'research',
+  'wporg-assets',
   'package.json',
   'package-lock.json',
   'webpack.config.js',
