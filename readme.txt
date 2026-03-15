@@ -1,4 +1,4 @@
-=== ABW-AI - Advanced Butler WordPress AI ===
+=== ABW-AI - Advanced Butler WP AI ===
 Contributors: madebyaris
 Tags: ai, mcp, chat, automation, gutenberg
 Requires at least: 6.9
@@ -12,7 +12,7 @@ Advanced AI assistant for WordPress with MCP support, Gutenberg-aware editing, a
 
 == Description ==
 
-ABW-AI (Advanced Butler WordPress AI) is a comprehensive AI assistant that integrates with the WordPress MCP ecosystem and provides an Angie-like conversational interface for managing your WordPress site.
+ABW-AI (Advanced Butler WP AI) is a comprehensive AI assistant that integrates with the WordPress MCP ecosystem and provides an Angie-like conversational interface for managing your WordPress site.
 
 = Key Features =
 

@@ -1,4 +1,4 @@
-# ABW-AI - Advanced Butler WordPress AI
+# ABW-AI - Advanced Butler WP AI
 
 **Enhanced for [MiniMax](https://www.minimax.io)**
 
