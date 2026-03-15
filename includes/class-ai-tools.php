@@ -200,8 +200,8 @@ class ABW_AI_Tools
 
         return [
             'improved_content' => $response['content'],
-            'original_length'  => str_word_count(strip_tags($content)),
-            'new_length'       => str_word_count(strip_tags($response['content'])),
+            'original_length'  => str_word_count(wp_strip_all_tags($content)),
+            'new_length'       => str_word_count(wp_strip_all_tags($response['content'])),
         ];
     }
 
@@ -224,7 +224,7 @@ class ABW_AI_Tools
         $prompt = sprintf(
             "Generate SEO-optimized metadata for the following content:\n\nTitle: %s\nContent: %s\n%s\n\nProvide:\n1. Optimized SEO title (max 60 characters)\n2. Meta description (max 155 characters)\n3. 5 relevant focus keywords\n\nFormat as JSON.",
             $title,
-            substr(strip_tags($content), 0, 1000),
+            substr(wp_strip_all_tags($content), 0, 1000),
             $focus_keyword ? "Focus keyword: $focus_keyword" : ''
         );
 
@@ -524,7 +524,7 @@ class ABW_AI_Tools
         $prompt = sprintf(
             "Generate %d frequently asked questions (FAQs) based on the following content. Make the questions natural and the answers concise.\n\nContent:\n%s\n\nFormat as JSON array with 'question' and 'answer' fields.",
             $count,
-            substr(strip_tags($content), 0, 2000)
+            substr(wp_strip_all_tags($content), 0, 2000)
         );
 
         $messages = [
@@ -579,7 +579,7 @@ class ABW_AI_Tools
             "Generate JSON-LD schema.org markup for a %s.\n\nTitle: %s\n%s%s\n\nProvide valid JSON-LD following schema.org specifications. Include @context, @type, and relevant properties.",
             $type,
             $title,
-            $content ? "Content excerpt: " . substr(strip_tags($content), 0, 500) . "\n" : '',
+            $content ? "Content excerpt: " . substr(wp_strip_all_tags($content), 0, 500) . "\n" : '',
             $url ? "URL: $url\n" : ''
         );
 
@@ -632,7 +632,7 @@ class ABW_AI_Tools
         $prompt = sprintf(
             "Summarize the following content in %s. Focus on the main points and key information.\n\nContent:\n%s",
             $length_guide[$length] ?? $length_guide['medium'],
-            substr(strip_tags($content), 0, 5000)
+            substr(wp_strip_all_tags($content), 0, 5000)
         );
 
         $messages = [
@@ -654,8 +654,8 @@ class ABW_AI_Tools
 
         return [
             'summary'        => $response['content'],
-            'original_length' => str_word_count(strip_tags($content)),
-            'summary_length'  => str_word_count(strip_tags($response['content'])),
+            'original_length' => str_word_count(wp_strip_all_tags($content)),
+            'summary_length'  => str_word_count(wp_strip_all_tags($response['content'])),
         ];
     }
 
@@ -693,7 +693,7 @@ class ABW_AI_Tools
             "Create social media posts for: %s\n\nPlatform guidelines:\n%s\n\nContent:\n%s\n\nGenerate one post per platform. Format as JSON array with 'platform' and 'post' fields.",
             $platform_list,
             implode("\n", $guides),
-            substr(strip_tags($content), 0, 2000)
+            substr(wp_strip_all_tags($content), 0, 2000)
         );
 
         $messages = [
@@ -743,7 +743,7 @@ class ABW_AI_Tools
 
         $prompt = sprintf(
             "Analyze the sentiment of the following content. Provide:\n1. Overall sentiment (positive, negative, neutral)\n2. Sentiment score (0-100)\n3. Key emotional indicators\n4. Brief explanation\n\nContent:\n%s\n\nFormat as JSON.",
-            substr(strip_tags($content), 0, 2000)
+            substr(wp_strip_all_tags($content), 0, 2000)
         );
 
         $messages = [
@@ -797,7 +797,7 @@ class ABW_AI_Tools
 
         $prompt = sprintf(
             "Detect the language of the following content. Provide:\n1. Language name\n2. Language code (ISO 639-1)\n3. Confidence level (0-100)\n\nContent:\n%s\n\nFormat as JSON.",
-            substr(strip_tags($content), 0, 1000)
+            substr(wp_strip_all_tags($content), 0, 1000)
         );
 
         $messages = [
@@ -976,6 +976,7 @@ class ABW_AI_Tools
         $valid_tones = ['professional', 'casual', 'persuasive', 'humorous', 'academic', 'friendly', 'authoritative'];
         if (! in_array($tone, $valid_tones, true)) {
             return new WP_Error('invalid_tone', sprintf(
+                /* translators: %s: comma-separated list of supported tones */
                 __('Invalid tone. Choose from: %s', 'abw-ai'),
                 implode(', ', $valid_tones)
             ));
@@ -1108,7 +1109,7 @@ class ABW_AI_Tools
 
         return [
             'content'    => $response['content'],
-            'word_count' => str_word_count(strip_tags($response['content'])),
+            'word_count' => str_word_count(wp_strip_all_tags($response['content'])),
         ];
     }
 
@@ -1130,7 +1131,7 @@ class ABW_AI_Tools
         $prompt = sprintf(
             "Generate a compelling excerpt/summary for the following content. The excerpt must be no longer than %d characters. It should be engaging and make readers want to read more.\n\nContent:\n%s\n\nProvide only the excerpt text, no explanations.",
             $max_length,
-            substr(strip_tags($content), 0, 3000)
+            substr(wp_strip_all_tags($content), 0, 3000)
         );
 
         $messages = [
@@ -1180,7 +1181,7 @@ class ABW_AI_Tools
             foreach ($matches as $index => $match) {
                 $tag = strtolower($match[1]);
                 $level = (int) substr($tag, 1);
-                $text = strip_tags($match[3]);
+                $text = wp_strip_all_tags($match[3]);
                 $id = ! empty($match[2]) ? $match[2] : sanitize_title($text) . '-' . $index;
 
                 $toc[] = [
@@ -1558,6 +1559,7 @@ class ABW_AI_Tools
 
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $counts = $wpdb->get_results($wpdb->prepare(
             "SELECT comment_approved, COUNT(*) as cnt
              FROM {$wpdb->comments}
@@ -1583,6 +1585,7 @@ class ABW_AI_Tools
             $total += (int) $row->cnt;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $top_commenters = $wpdb->get_results($wpdb->prepare(
             "SELECT comment_author, comment_author_email, COUNT(*) as cnt
              FROM {$wpdb->comments}
@@ -1855,7 +1858,7 @@ class ABW_AI_Tools
             $title ? "Title: $title\n" : '',
             $focus_keyword ? "Focus keyword: $focus_keyword\n" : '',
             $url ? "URL: $url\n" : '',
-            substr(strip_tags($content), 0, 3000)
+            substr(wp_strip_all_tags($content), 0, 3000)
         );
 
         $messages = [
@@ -1939,13 +1942,13 @@ class ABW_AI_Tools
                 'id'    => $rp->ID,
                 'title' => $rp->post_title,
                 'url'   => get_permalink($rp->ID),
-                'excerpt' => wp_trim_words(strip_tags($rp->post_content), 30),
+                'excerpt' => wp_trim_words(wp_strip_all_tags($rp->post_content), 30),
             ];
         }
 
         $prompt = sprintf(
             "Analyze the following post content and suggest where internal links to other posts should be added.\n\nCurrent post content:\n%s\n\nAvailable posts to link to:\n%s\n\nFor each suggestion provide:\n- anchor_text: the text in the current post to link\n- target_post_id: the ID of the post to link to\n- target_title: the title of the target post\n- target_url: the URL of the target post\n- context: brief explanation of why this link is relevant\n\nFormat as JSON array of suggestions.",
-            substr(strip_tags($post->post_content), 0, 3000),
+            substr(wp_strip_all_tags($post->post_content), 0, 3000),
             wp_json_encode($posts_context)
         );
 
@@ -2081,7 +2084,7 @@ class ABW_AI_Tools
                 }
                 $links[] = [
                     'url'     => $href,
-                    'context' => strip_tags($match[2]),
+                    'context' => wp_strip_all_tags($match[2]),
                 ];
             }
         }
@@ -2152,7 +2155,7 @@ class ABW_AI_Tools
      */
     private static function generate_excerpt(string $content, int $length = 55): string
     {
-        $text = strip_tags($content);
+        $text = wp_strip_all_tags($content);
         $words = explode(' ', $text);
 
         if (count($words) <= $length) {

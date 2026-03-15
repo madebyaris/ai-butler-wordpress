@@ -139,6 +139,7 @@ class ABW_Chat_Interface {
 		// Default: off. Enable explicitly via URL param (?abw_debug_tools=1) for admins.
 		$debug_tool_results = false;
 		if ( current_user_can( 'manage_options' ) && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only debug toggle for administrators.
 			$debug_tool_results = isset( $_GET['abw_debug_tools'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['abw_debug_tools'] ) );
 		}
 
@@ -564,6 +565,7 @@ class ABW_Chat_Interface {
 		}
 
 		$message        = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON payload is unslashed and decoded into structured data.
 		$context        = isset( $_POST['context'] ) ? json_decode( wp_unslash( $_POST['context'] ), true ) : [];
 		$editor_context = isset( $_POST['editor_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['editor_context'] ) ) : '';
 		$agent_mode     = isset( $_POST['agent_mode'] ) ? sanitize_key( wp_unslash( $_POST['agent_mode'] ) ) : 'general';
@@ -1433,6 +1435,7 @@ class ABW_Chat_Interface {
 			'tools'             => $tools,
 			'provider'          => ABW_AI_Router::get_provider(),
 			'user_message'      => $message,
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- This method is only reached from nonce-protected AJAX flows.
 			'history_scope'     => self::normalize_history_scope( isset( $_POST['history_scope'] ) ? sanitize_key( wp_unslash( $_POST['history_scope'] ) ) : self::DEFAULT_HISTORY_SCOPE ),
 			'assistant_content' => $response['content'] ?? '',
 			'tool_plan'         => $response['tool_calls'] ?? [],
@@ -2057,6 +2060,7 @@ class ABW_Chat_Interface {
 
 		if ( count( $items ) > $max_rows ) {
 			$lines[] = '';
+			/* translators: 1: shown item count, 2: total item count */
 			$lines[] = sprintf( __( '_Showing %1$d of %2$d_', 'abw-ai' ), $max_rows, count( $items ) );
 		}
 

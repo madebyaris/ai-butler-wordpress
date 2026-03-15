@@ -318,4 +318,4 @@ ABW-AI is proudly sponsored by **MiniMax**. Their high-performance AI models wit
 
 ## License
 
-MIT -- see [LICENSE](https://opensource.org/licenses/MIT).
+GPL-2.0-or-later -- see `LICENSE`.

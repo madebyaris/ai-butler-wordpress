@@ -151,6 +151,15 @@ class ABW_Background_Jobs {
 	}
 
 	/**
+	 * Get a SQL-safe jobs table name.
+	 *
+	 * @return string
+	 */
+	private static function get_table_name_sql() {
+		return preg_replace( '/[^A-Za-z0-9_]/', '', self::get_table_name() );
+	}
+
+	/**
 	 * Create the background jobs database table.
 	 *
 	 * Called on plugin activation.
@@ -196,8 +205,8 @@ class ABW_Background_Jobs {
 	 */
 	public static function drop_table() {
 		global $wpdb;
-		$table_name = self::get_table_name();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$table_name = self::get_table_name_sql();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$wpdb->query( "DROP TABLE IF EXISTS {$table_name}" );
 		delete_option( 'abw_bg_jobs_db_version' );
 	}
@@ -250,7 +259,7 @@ class ABW_Background_Jobs {
 	public static function create_job( $user_id, $job_type, $data ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 		$job_token  = wp_generate_password( 64, false );
 
 		$result = $wpdb->insert(
@@ -290,9 +299,9 @@ class ABW_Background_Jobs {
 	public static function get_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_name} WHERE id = %d", $job_id ) );
 	}
 
@@ -305,9 +314,9 @@ class ABW_Background_Jobs {
 	public static function get_job_by_token( $job_token ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_name} WHERE job_token = %s", $job_token ) );
 	}
 
@@ -321,7 +330,8 @@ class ABW_Background_Jobs {
 	public static function get_active_jobs_for_user( int $user_id, string $history_scope = '' ): array {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$rows       = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT job_token, job_type, status, input_data, created_at
@@ -374,14 +384,14 @@ class ABW_Background_Jobs {
 	public static function lock_job( $job_id ) {
 		global $wpdb;
 
-		$table_name   = self::get_table_name();
+		$table_name   = self::get_table_name_sql();
 		$safe_timeout = self::get_safe_timeout();
 		$now          = current_time( 'mysql' );
 		$timeout_at   = gmdate( 'Y-m-d H:i:s', time() + $safe_timeout );
 
 		// Atomic lock + increment attempts in a single query.
 		// Uses WHERE status = 'pending' to prevent race conditions.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$locked = $wpdb->query( $wpdb->prepare(
 			"UPDATE {$table_name} SET status = %s, started_at = %s, timeout_at = %s, attempts = attempts + 1 WHERE id = %d AND status = %s",
 			self::STATUS_PROCESSING,
@@ -403,7 +413,7 @@ class ABW_Background_Jobs {
 	public static function complete_job( $job_id, $result_data ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$wpdb->update(
 			$table_name,
@@ -427,7 +437,7 @@ class ABW_Background_Jobs {
 	public static function fail_job( $job_id, $error_message ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$wpdb->update(
 			$table_name,
@@ -451,7 +461,7 @@ class ABW_Background_Jobs {
 	public static function cancel_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$updated = $wpdb->update(
 			$table_name,
@@ -479,7 +489,7 @@ class ABW_Background_Jobs {
 	public static function retry_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Only retry if the job is failed and hasn't exceeded max attempts.
 		$job = self::get_job( $job_id );
@@ -776,10 +786,10 @@ class ABW_Background_Jobs {
 	public static function try_process_next() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Find the oldest pending job.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$job = $wpdb->get_row( $wpdb->prepare(
 			"SELECT id FROM {$table_name} WHERE status = %s ORDER BY created_at ASC LIMIT 1",
 			self::STATUS_PENDING
@@ -887,11 +897,11 @@ class ABW_Background_Jobs {
 	public static function detect_stuck_jobs() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 		$now        = current_time( 'mysql' );
 
 		// Find stuck jobs (processing but past their timeout).
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$stuck_jobs = $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, attempts, max_attempts FROM {$table_name} WHERE status = %s AND timeout_at IS NOT NULL AND timeout_at < %s",
 			self::STATUS_PROCESSING,
@@ -929,10 +939,10 @@ class ABW_Background_Jobs {
 	public static function cleanup_old_jobs() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Delete completed jobs older than 7 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 7 DAY)",
 			self::STATUS_COMPLETED,
@@ -940,7 +950,7 @@ class ABW_Background_Jobs {
 		) );
 
 		// Delete failed jobs older than 30 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 30 DAY)",
 			self::STATUS_FAILED,
@@ -948,7 +958,7 @@ class ABW_Background_Jobs {
 		) );
 
 		// Delete cancelled jobs older than 7 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 7 DAY)",
 			self::STATUS_CANCELLED,
@@ -1037,7 +1047,7 @@ class ABW_Background_Jobs {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
 		}
 
-		$job_id = isset( $_POST['job_id'] ) ? (int) wp_unslash( $_POST['job_id'] ) : 0;
+		$job_id = isset( $_POST['job_id'] ) ? absint( wp_unslash( $_POST['job_id'] ) ) : 0;
 
 		if ( ! $job_id ) {
 			wp_send_json_error( [ 'message' => __( 'Job ID is required.', 'abw-ai' ) ] );
@@ -1064,7 +1074,7 @@ class ABW_Background_Jobs {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
 		}
 
-		$job_id = isset( $_POST['job_id'] ) ? (int) wp_unslash( $_POST['job_id'] ) : 0;
+		$job_id = isset( $_POST['job_id'] ) ? absint( wp_unslash( $_POST['job_id'] ) ) : 0;
 
 		if ( ! $job_id ) {
 			wp_send_json_error( [ 'message' => __( 'Job ID is required.', 'abw-ai' ) ] );
@@ -1091,17 +1101,17 @@ class ABW_Background_Jobs {
 
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 		$page       = isset( $_POST['page'] ) ? max( 1, (int) wp_unslash( $_POST['page'] ) ) : 1;
 		$per_page   = 20;
 		$offset     = ( $page - 1 ) * $per_page;
 
 		// Get total count.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
 
 		// Get jobs.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$jobs = $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, user_id, job_type, status, error_message, attempts, max_attempts, created_at, started_at, completed_at FROM {$table_name} ORDER BY created_at DESC LIMIT %d OFFSET %d",
 			$per_page,
@@ -1147,9 +1157,9 @@ class ABW_Background_Jobs {
 	public static function get_job_counts() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$results = $wpdb->get_results( "SELECT status, COUNT(*) as count FROM {$table_name} GROUP BY status" );
 
 		$counts = [
@@ -1178,9 +1188,9 @@ class ABW_Background_Jobs {
 	public static function get_recent_jobs( $limit = 50 ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_results( $wpdb->prepare(
 			"SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d",
 			$limit

@@ -6,8 +6,8 @@
  * Version: 1.0.0
  * Author: ABW-AI Contributors
  * Author URI: https://github.com/madebyaris/ai-butler-wordpress
- * License: MIT
- * License URI: https://opensource.org/licenses/MIT
+ * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: abw-ai
  * Requires at least: 6.9
  * Requires PHP: 7.4

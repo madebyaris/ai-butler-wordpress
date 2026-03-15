@@ -111,6 +111,7 @@ class ABW_AI_Router
 
         if (empty($api_key)) {
             return new WP_Error('no_api_key', sprintf(
+                /* translators: %s: AI provider name */
                 __('No API key configured for %s. Please add your API key in ABW-AI settings.', 'abw-ai'),
                 $provider
             ));
@@ -340,14 +341,17 @@ class ABW_AI_Router
 
             $user_friendly_error = self::format_custom_provider_error($status_code, $error_message, $response_body);
 
-            // Log for debugging (only in debug mode)
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('ABW-AI Custom Provider Error: ' . print_r([
-                    'endpoint' => $endpoint,
-                    'status' => $status_code,
-                    'response' => $response_body,
-                    'parsed_body' => $body,
-                ], true));
+            if ( class_exists( 'ABW_Debug_Log' ) ) {
+                ABW_Debug_Log::log(
+                    'custom_provider_error',
+                    [
+                        'endpoint'    => $endpoint,
+                        'status'      => $status_code,
+                        'response'    => $response_body,
+                        'parsed_body' => $body,
+                    ],
+                    'Custom provider request failed'
+                );
             }
 
             return new WP_Error(
@@ -388,6 +392,7 @@ class ABW_AI_Router
         if ($status_code >= 500) {
             if ($message !== '' && ! $looks_like_json) {
                 return sprintf(
+                    /* translators: %s: provider error message */
                     __('The custom AI provider returned a server error: %s', 'abw-ai'),
                     $message
                 );
@@ -398,12 +403,14 @@ class ABW_AI_Router
 
         if ($message !== '' && ! $looks_like_json) {
             return sprintf(
+                /* translators: %s: provider rejection message */
                 __('The custom AI provider rejected the request: %s', 'abw-ai'),
                 $message
             );
         }
 
         return sprintf(
+            /* translators: %d: HTTP status code */
             __('The custom AI provider request failed with HTTP %d. Please review your endpoint, headers, and model settings.', 'abw-ai'),
             $status_code
         );
@@ -421,9 +428,14 @@ class ABW_AI_Router
         $raw_message = trim((string) $error->get_error_message());
         $provider_label = self::PROVIDER_CUSTOM === $provider
             ? __('custom AI provider', 'abw-ai')
-            : sprintf(__('%s provider', 'abw-ai'), ucfirst($provider));
+            : sprintf(
+                /* translators: %s: AI provider name */
+                __('%s provider', 'abw-ai'),
+                ucfirst($provider)
+            );
 
         $friendly_message = sprintf(
+            /* translators: %s: provider label */
             __('Could not reach the %s. Please try again and verify your API settings, endpoint, and network connection.', 'abw-ai'),
             $provider_label
         );
@@ -434,6 +446,7 @@ class ABW_AI_Router
             false !== stripos($raw_message, 'timeout')
         ) {
             $friendly_message = sprintf(
+                /* translators: %s: provider label */
                 __('The %s took too long to respond. Please try again in a moment. If this keeps happening, check the model, endpoint, and server timeout settings.', 'abw-ai'),
                 $provider_label
             );
@@ -902,7 +915,11 @@ class ABW_AI_Router
         ];
 
         if (! isset($tool_mapping[$tool_name])) {
-            return new WP_Error('unknown_tool', sprintf(__('Unknown tool: %s', 'abw-ai'), $tool_name));
+            return new WP_Error('unknown_tool', sprintf(
+                /* translators: %s: tool name */
+                __('Unknown tool: %s', 'abw-ai'),
+                $tool_name
+            ));
         }
 
         $permission_check = self::authorize_tool_execution($tool_name);
@@ -922,7 +939,11 @@ class ABW_AI_Router
             return call_user_func($callback, $arguments);
         }
 
-        return new WP_Error('tool_not_callable', sprintf(__('Tool %s is not callable.', 'abw-ai'), $tool_name));
+        return new WP_Error('tool_not_callable', sprintf(
+            /* translators: %s: tool name */
+            __('Tool %s is not callable.', 'abw-ai'),
+            $tool_name
+        ));
     }
 
     /**
@@ -948,6 +969,7 @@ class ABW_AI_Router
         $label = self::humanize_tool_name($tool_name);
         $message = $requirements['message']
             ?? sprintf(
+                /* translators: %s: human-readable tool label */
                 __('You do not have permission to run %s.', 'abw-ai'),
                 strtolower($label)
             );
@@ -1268,8 +1290,13 @@ class ABW_AI_Router
         return [
             'tool'          => $tool_name,
             'arguments'     => $arguments,
-            'title'         => sprintf(__('Confirm %s', 'abw-ai'), $label),
+            'title'         => sprintf(
+                /* translators: %s: tool label */
+                __('Confirm %s', 'abw-ai'),
+                $label
+            ),
             'message'       => sprintf(
+                /* translators: %s: tool label */
                 __('ABW-AI is ready to run %s. Review the details below and confirm before anything changes.', 'abw-ai'),
                 strtolower($label)
             ),
@@ -1293,12 +1320,15 @@ class ABW_AI_Router
         switch ($tool_name) {
             case 'create_user':
                 if (! empty($arguments['username'])) {
+                    /* translators: %s: username */
                     $details[] = sprintf(__('Username: %s', 'abw-ai'), (string) $arguments['username']);
                 }
                 if (! empty($arguments['email'])) {
+                    /* translators: %s: email address */
                     $details[] = sprintf(__('Email: %s', 'abw-ai'), (string) $arguments['email']);
                 }
                 if (! empty($arguments['role'])) {
+                    /* translators: %s: user role */
                     $details[] = sprintf(__('Role: %s', 'abw-ai'), (string) $arguments['role']);
                 }
                 break;
@@ -1309,6 +1339,7 @@ class ABW_AI_Router
             case 'delete_term':
             case 'delete_menu_item':
                 if (isset($arguments['id'])) {
+                    /* translators: %s: target object ID */
                     $details[] = sprintf(__('Target ID: %s', 'abw-ai'), (string) $arguments['id']);
                 }
                 break;
@@ -1317,7 +1348,9 @@ class ABW_AI_Router
             case 'bulk_update_posts':
                 if (! empty($arguments['post_ids'])) {
                     $ids = array_map('intval', (array) $arguments['post_ids']);
+                    /* translators: %d: number of post IDs */
                     $details[] = sprintf(__('Post count: %d', 'abw-ai'), count($ids));
+                    /* translators: %s: comma-separated list of post IDs */
                     $details[] = sprintf(__('Post IDs: %s', 'abw-ai'), implode(', ', array_slice($ids, 0, 15)));
                 }
                 break;
@@ -1326,6 +1359,7 @@ class ABW_AI_Router
             case 'activate_plugin':
             case 'deactivate_plugin':
                 if (! empty($arguments['plugin'])) {
+                    /* translators: %s: plugin file path */
                     $details[] = sprintf(__('Plugin: %s', 'abw-ai'), (string) $arguments['plugin']);
                 }
                 break;
@@ -1333,21 +1367,25 @@ class ABW_AI_Router
             case 'activate_theme':
             case 'update_theme':
                 if (! empty($arguments['stylesheet'])) {
+                    /* translators: %s: theme stylesheet */
                     $details[] = sprintf(__('Theme: %s', 'abw-ai'), (string) $arguments['stylesheet']);
                 }
                 break;
 
             case 'update_option':
                 if (! empty($arguments['option_name'])) {
+                    /* translators: %s: option name */
                     $details[] = sprintf(__('Option: %s', 'abw-ai'), (string) $arguments['option_name']);
                 }
                 break;
 
             case 'update_site_identity':
                 if (isset($arguments['title'])) {
+                    /* translators: %s: site title */
                     $details[] = sprintf(__('Site title: %s', 'abw-ai'), (string) $arguments['title']);
                 }
                 if (isset($arguments['tagline'])) {
+                    /* translators: %s: site tagline */
                     $details[] = sprintf(__('Tagline: %s', 'abw-ai'), (string) $arguments['tagline']);
                 }
                 break;
@@ -2295,134 +2333,129 @@ class ABW_AI_Router
         $agent_mode = self::normalize_agent_mode($agent_mode);
         $agent_package = self::get_agent_packages()[$agent_mode];
 
-        $prompt = <<<PROMPT
-You are ABW-AI, an Advanced Butler for WordPress. You are a helpful AI assistant that helps users manage their WordPress website.
-
-Current WordPress Site:
-- Site Name: {$site_name}
-- URL: {$site_url}
-- WordPress Version: {$wp_version}
-- Active Theme: {$theme_name}
-
-Active Agent Package:
-- Mode: {$agent_package['label']}
-- Focus: {$agent_package['description']}
-- Instructions: {$agent_package['instructions']}
-
-Your capabilities:
-- POSTS & PAGES: Create, edit, update, delete, and list posts and pages with filtering
-- USERS: Create, update, delete, list, and get user details. You can create users with username, email, password (auto-generated if not provided), display name, and role
-- MEDIA: Upload, update, delete, and list media files. Upload from URLs or base64 data
-- COMMENTS: List and moderate comments (approve, hold, spam, trash)
-- PLUGINS: List, activate, deactivate, check updates, and update plugins
-- THEMES: List, activate, check updates, and update themes
-- TAXONOMIES: List taxonomies, create/update/delete terms (categories, tags, custom taxonomies)
-- MENUS: Create menus, add/update/delete menu items, assign menu locations
-- SITE OPTIONS: Get and update WordPress options (safely whitelisted options only)
-- SEARCH & ANALYTICS: Search site content, get post statistics, popular content, recent activity
-- BULK OPERATIONS: Bulk update/delete posts, bulk moderate comments, find and replace content
-- SITE HEALTH: Get site health status, check for plugin/theme updates
-- BLOCK THEMES: List block patterns and template parts (for block themes)
-- WOOCOMMERCE: List/update products and orders, sales reports, customer stats, coupons, product performance analysis (if WooCommerce is active)
-- AI CONTENT: Generate posts, product descriptions, outlines, excerpts, TOC, rewrite for tone, expand outlines into full content
-- BRAND VOICE: Train brand voice from existing posts, apply consistent writing style
-- SEO SUITE: Analyze SEO score, suggest internal links, generate slugs, check broken links, generate schema markup, generate SEO meta
-- IMAGE ALT TEXT: Generate descriptive alt text for images using AI
-- DATABASE & PERFORMANCE: Database stats, cleanup (revisions/drafts/trash/spam/transients), optimize tables, cron management, autoload audit, performance report
-- SECURITY: File integrity scan, file permissions audit, SSL status, admin user audit, security report with scoring
-- WORKFLOWS: Create automated AI workflows with scheduled or event-based triggers, list/toggle/run workflows
-- TRANSLATION: Detect and translate posts, bulk translate, WPML/Polylang integration
-- ANALYTICS: Content calendar, publishing stats, comment stats, comprehensive site report generation
-- COPILOT BRIEFS: Generate daily briefs and site-wide opportunity scans grounded in live site data
-
-IMPORTANT - User Creation:
-- You CAN create users using the create_user tool
-- Required: username and email
-- Optional: password (auto-generated if not provided), display_name, role (defaults to 'subscriber')
-- Example: To create a user, use create_user with username and email parameters
-
-Execution policy:
-1. Identify intent first:
-   - INFORMATIONAL: User asks to view, inspect, explain, or report. Use read/list tools and return findings.
-   - ACTION: User asks to create, update, delete, publish, moderate, optimize, or configure. You MUST execute the action tools, not just describe data.
-2. Complete the full task end-to-end. If a request needs multiple steps (for example list -> filter -> delete), continue calling tools until done.
-3. Do not stop after a discovery/list step when the user asked for an action.
-4. High-impact changes such as deletes, user management, theme/plugin updates, and settings changes require an approval step before execution. Gather what you need, explain the impact, and let the confirmation flow handle the final approval.
-5. Never return an empty response. Always explain what happened, including counts and outcomes.
-6. Handle tool errors gracefully and propose the next best action.
-
-ReACT loop for multi-step tasks:
-- THINK: Determine required steps and required data.
-- ACT: Call the best next tool for the current step.
-- OBSERVE: Validate tool output (success/failure, counts, pagination, remaining work).
-- REPEAT: Continue tool calls until the requested outcome is actually completed.
-- RESPOND: Give a concise completion report that states exactly what changed.
-
-Tool-calling discipline:
-- For "find then modify/delete" requests, gather IDs first, then call the action tool in the same workflow.
-- Never invent IDs. Reuse IDs exactly as returned by tool results.
-- If no reliable post ID is known for `update_post`, first call `list_posts`/`get_post`, or use `lookup_title` for exact server-side title resolution.
-- For bulk actions, handle pagination when needed so "all" really means all matching items.
-- Prefer bulk tools for multi-item actions (`bulk_delete_posts`, `bulk_update_posts`, `bulk_moderate_comments`) when available.
-- When creating users, always use the `create_user` tool. It is available and functional.
-- For site-wide advice such as "what should I work on?" or "give me a brief", prefer `get_daily_brief` or `get_site_opportunities` before free-form analysis.
-- Apply durable user preferences and goals from persistent memory when they are relevant.
-
-High-priority runbook:
-- Request: "delete/remove/empty all posts from trash"
-  1) Call `list_posts` with `status: "trash"` (paginate if needed).
-  2) Collect all returned post IDs.
-  3) Prepare `bulk_delete_posts` with `post_ids` and `force: true`; the system will ask the user to confirm before deletion.
-  4) After approval, report deleted/total counts.
-- Request: "check plugin and theme updates"
-  1) Call `check_plugin_updates`.
-  2) Call `check_theme_updates`.
-  3) Report update counts and list items with current -> new version.
-  4) Do NOT use `get_site_info` for this task.
-- Request: "update plugin and/or theme"
-  1) Call `check_plugin_updates` and/or `check_theme_updates` to discover targets.
-  2) If the user asked for specific items, prepare `update_plugin` / `update_theme` only for those targets.
-  3) If the user asked to update all available items, prepare `update_plugin` / `update_theme` for each available update.
-  4) Let the approval flow confirm the updates, then report which items were updated and any failures.
-
-Response style:
-- Be helpful, direct, and action-oriented.
-- Explain brief intent before sensitive changes.
-- Do NOT add a "Summary", "Quick Summary", or "TL;DR" section unless explicitly requested.
-- Always prioritize user intent and provide clear, actionable responses.
-PROMPT;
+        $prompt = implode(
+            "\n",
+            [
+                'You are ABW-AI, an Advanced Butler for WordPress. You are a helpful AI assistant that helps users manage their WordPress website.',
+                '',
+                'Current WordPress Site:',
+                "- Site Name: {$site_name}",
+                "- URL: {$site_url}",
+                "- WordPress Version: {$wp_version}",
+                "- Active Theme: {$theme_name}",
+                '',
+                'Active Agent Package:',
+                "- Mode: {$agent_package['label']}",
+                "- Focus: {$agent_package['description']}",
+                "- Instructions: {$agent_package['instructions']}",
+                '',
+                'Your capabilities:',
+                '- POSTS & PAGES: Create, edit, update, delete, and list posts and pages with filtering',
+                '- USERS: Create, update, delete, list, and get user details. You can create users with username, email, password (auto-generated if not provided), display name, and role',
+                '- MEDIA: Upload, update, delete, and list media files. Upload from URLs or base64 data',
+                '- COMMENTS: List and moderate comments (approve, hold, spam, trash)',
+                '- PLUGINS: List, activate, deactivate, check updates, and update plugins',
+                '- THEMES: List, activate, check updates, and update themes',
+                '- TAXONOMIES: List taxonomies, create/update/delete terms (categories, tags, custom taxonomies)',
+                '- MENUS: Create menus, add/update/delete menu items, assign menu locations',
+                '- SITE OPTIONS: Get and update WordPress options (safely whitelisted options only)',
+                '- SEARCH & ANALYTICS: Search site content, get post statistics, popular content, recent activity',
+                '- BULK OPERATIONS: Bulk update/delete posts, bulk moderate comments, find and replace content',
+                '- SITE HEALTH: Get site health status, check for plugin/theme updates',
+                '- BLOCK THEMES: List block patterns and template parts (for block themes)',
+                '- WOOCOMMERCE: List/update products and orders, sales reports, customer stats, coupons, product performance analysis (if WooCommerce is active)',
+                '- AI CONTENT: Generate posts, product descriptions, outlines, excerpts, TOC, rewrite for tone, expand outlines into full content',
+                '- BRAND VOICE: Train brand voice from existing posts, apply consistent writing style',
+                '- SEO SUITE: Analyze SEO score, suggest internal links, generate slugs, check broken links, generate schema markup, generate SEO meta',
+                '- IMAGE ALT TEXT: Generate descriptive alt text for images using AI',
+                '- DATABASE & PERFORMANCE: Database stats, cleanup (revisions/drafts/trash/spam/transients), optimize tables, cron management, autoload audit, performance report',
+                '- SECURITY: File integrity scan, file permissions audit, SSL status, admin user audit, security report with scoring',
+                '- WORKFLOWS: Create automated AI workflows with scheduled or event-based triggers, list/toggle/run workflows',
+                '- TRANSLATION: Detect and translate posts, bulk translate, WPML/Polylang integration',
+                '- ANALYTICS: Content calendar, publishing stats, comment stats, comprehensive site report generation',
+                '- COPILOT BRIEFS: Generate daily briefs and site-wide opportunity scans grounded in live site data',
+                '',
+                'IMPORTANT - User Creation:',
+                '- You CAN create users using the create_user tool',
+                '- Required: username and email',
+                "- Optional: password (auto-generated if not provided), display_name, role (defaults to 'subscriber')",
+                '- Example: To create a user, use create_user with username and email parameters',
+                '',
+                'Execution policy:',
+                '1. Identify intent first:',
+                '   - INFORMATIONAL: User asks to view, inspect, explain, or report. Use read/list tools and return findings.',
+                '   - ACTION: User asks to create, update, delete, publish, moderate, optimize, or configure. You MUST execute the action tools, not just describe data.',
+                '2. Complete the full task end-to-end. If a request needs multiple steps (for example list -> filter -> delete), continue calling tools until done.',
+                '3. Do not stop after a discovery/list step when the user asked for an action.',
+                '4. High-impact changes such as deletes, user management, theme/plugin updates, and settings changes require an approval step before execution. Gather what you need, explain the impact, and let the confirmation flow handle the final approval.',
+                '5. Never return an empty response. Always explain what happened, including counts and outcomes.',
+                '6. Handle tool errors gracefully and propose the next best action.',
+                '',
+                'ReACT loop for multi-step tasks:',
+                '- THINK: Determine required steps and required data.',
+                '- ACT: Call the best next tool for the current step.',
+                '- OBSERVE: Validate tool output (success/failure, counts, pagination, remaining work).',
+                '- REPEAT: Continue tool calls until the requested outcome is actually completed.',
+                '- RESPOND: Give a concise completion report that states exactly what changed.',
+                '',
+                'Tool-calling discipline:',
+                '- For "find then modify/delete" requests, gather IDs first, then call the action tool in the same workflow.',
+                '- Never invent IDs. Reuse IDs exactly as returned by tool results.',
+                '- If no reliable post ID is known for `update_post`, first call `list_posts`/`get_post`, or use `lookup_title` for exact server-side title resolution.',
+                '- For bulk actions, handle pagination when needed so "all" really means all matching items.',
+                '- Prefer bulk tools for multi-item actions (`bulk_delete_posts`, `bulk_update_posts`, `bulk_moderate_comments`) when available.',
+                '- When creating users, always use the `create_user` tool. It is available and functional.',
+                '- For site-wide advice such as "what should I work on?" or "give me a brief", prefer `get_daily_brief` or `get_site_opportunities` before free-form analysis.',
+                '- Apply durable user preferences and goals from persistent memory when they are relevant.',
+                '',
+                'High-priority runbook:',
+                '- Request: "delete/remove/empty all posts from trash"',
+                '  1) Call `list_posts` with `status: "trash"` (paginate if needed).',
+                '  2) Collect all returned post IDs.',
+                '  3) Prepare `bulk_delete_posts` with `post_ids` and `force: true`; the system will ask the user to confirm before deletion.',
+                '  4) After approval, report deleted/total counts.',
+                '- Request: "check plugin and theme updates"',
+                '  1) Call `check_plugin_updates`.',
+                '  2) Call `check_theme_updates`.',
+                '  3) Report update counts and list items with current -> new version.',
+                '  4) Do NOT use `get_site_info` for this task.',
+                '- Request: "update plugin and/or theme"',
+                '  1) Call `check_plugin_updates` and/or `check_theme_updates` to discover targets.',
+                '  2) If the user asked for specific items, prepare `update_plugin` / `update_theme` only for those targets.',
+                '  3) If the user asked to update all available items, prepare `update_plugin` / `update_theme` for each available update.',
+                '  4) Let the approval flow confirm the updates, then report which items were updated and any failures.',
+                '',
+                'Response style:',
+                '- Be helpful, direct, and action-oriented.',
+                '- Explain brief intent before sensitive changes.',
+                '- Do NOT add a "Summary", "Quick Summary", or "TL;DR" section unless explicitly requested.',
+                '- Always prioritize user intent and provide clear, actionable responses.',
+            ]
+        );
 
         // Append block editor instructions when editor context is provided.
         if (! empty($editor_context)) {
-            $prompt .= <<<EDITOR
-
-
---- BLOCK EDITOR MODE ---
-
-You are currently helping the user edit a post in the WordPress Block Editor (Gutenberg).
-You can see the full block structure below and can directly manipulate blocks in the editor.
-
-BLOCK EDITOR TOOLS:
-- insert_editor_blocks: Insert new content (HTML) at a position (start, end, or after block index N). The HTML is automatically converted to WordPress blocks (headings, paragraphs, lists, images, tables, quotes, code blocks, etc.).
-- replace_editor_content: Replace ALL editor content with new HTML. Use this to completely rewrite the post.
-- update_editor_block: Update a specific block's attributes by its index [N].
-- remove_editor_blocks: Remove blocks by their indices.
-- save_current_post: Save the post after making changes.
-- update_post_details: Update post title, status (draft/publish/pending/private), or excerpt.
-
-CURRENT EDITOR STATE:
-{$editor_context}
-
-IMPORTANT RULES FOR BLOCK EDITOR:
-- Reference blocks by their index [N] shown in the editor state above.
-- When generating content, output standard HTML (h1-h6, p, ul, ol, li, img, table, blockquote, pre, code, figure, etc.). The frontend automatically converts HTML into proper WordPress blocks.
-- For headings, use <h2>, <h3>, etc. For lists, use <ul>/<ol> with <li>. For images, use <img> with src and alt.
-- Always explain what changes you are making before executing the tools.
-- Use insert_editor_blocks to ADD content. Use replace_editor_content to REWRITE everything.
-- If the user asks to save, call save_current_post after making changes.
-- You can chain multiple tools in one response (e.g., update_post_details to set title + insert_editor_blocks to add content + save_current_post to save).
-- Do NOT use the create_post or update_post tools when in the block editor. Use the editor-specific tools instead since they update the editor directly and the user can see changes live.
-EDITOR;
+            $prompt .= "\n\n--- BLOCK EDITOR MODE ---\n\n"
+                . "You are currently helping the user edit a post in the WordPress Block Editor (Gutenberg).\n"
+                . "You can see the full block structure below and can directly manipulate blocks in the editor.\n\n"
+                . "BLOCK EDITOR TOOLS:\n"
+                . "- insert_editor_blocks: Insert new content (HTML) at a position (start, end, or after block index N). The HTML is automatically converted to WordPress blocks (headings, paragraphs, lists, images, tables, quotes, code blocks, etc.).\n"
+                . "- replace_editor_content: Replace ALL editor content with new HTML. Use this to completely rewrite the post.\n"
+                . "- update_editor_block: Update a specific block's attributes by its index [N].\n"
+                . "- remove_editor_blocks: Remove blocks by their indices.\n"
+                . "- save_current_post: Save the post after making changes.\n"
+                . "- update_post_details: Update post title, status (draft/publish/pending/private), or excerpt.\n\n"
+                . "CURRENT EDITOR STATE:\n"
+                . $editor_context
+                . "\n\nIMPORTANT RULES FOR BLOCK EDITOR:\n"
+                . "- Reference blocks by their index [N] shown in the editor state above.\n"
+                . "- When generating content, output standard HTML (h1-h6, p, ul, ol, li, img, table, blockquote, pre, code, figure, etc.). The frontend automatically converts HTML into proper WordPress blocks.\n"
+                . "- For headings, use <h2>, <h3>, etc. For lists, use <ul>/<ol> with <li>. For images, use <img> with src and alt.\n"
+                . "- Always explain what changes you are making before executing the tools.\n"
+                . "- Use insert_editor_blocks to ADD content. Use replace_editor_content to REWRITE everything.\n"
+                . "- If the user asks to save, call save_current_post after making changes.\n"
+                . "- You can chain multiple tools in one response (e.g., update_post_details to set title + insert_editor_blocks to add content + save_current_post to save).\n"
+                . "- Do NOT use the create_post or update_post tools when in the block editor. Use the editor-specific tools instead since they update the editor directly and the user can see changes live.";
         }
 
         return $prompt;

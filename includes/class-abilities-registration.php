@@ -1683,20 +1683,24 @@ class ABW_Abilities_Registration
             );
         }
 
-        global $wpdb;
-
         $post_type = sanitize_key($input['post_type'] ?? '');
-        $sql       = "SELECT ID FROM {$wpdb->posts} WHERE post_title = %s AND post_status NOT IN ('auto-draft', 'inherit')";
-        $params    = [ $lookup_title ];
+        $args = [
+            'post_status'      => 'any',
+            'posts_per_page'   => 2,
+            'orderby'          => 'ID',
+            'order'            => 'DESC',
+            'title'            => $lookup_title,
+            'suppress_filters' => false,
+            'fields'           => 'ids',
+        ];
 
         if ('' !== $post_type) {
-            $sql      .= ' AND post_type = %s';
-            $params[] = $post_type;
+            $args['post_type'] = $post_type;
+        } else {
+            $args['post_type'] = 'any';
         }
 
-        $sql      .= ' ORDER BY ID DESC LIMIT 2';
-        $prepared  = $wpdb->prepare($sql, ...$params);
-        $matches   = $wpdb->get_col($prepared);
+        $matches   = get_posts($args);
         $match_cnt = is_array($matches) ? count($matches) : 0;
 
         if (1 !== $match_cnt) {
@@ -2207,7 +2211,7 @@ class ABW_Abilities_Registration
 
         $id = media_handle_sideload($file_array, 0);
         if (is_wp_error($id)) {
-            @unlink($tmp);
+            wp_delete_file($tmp);
             return $id;
         }
 
@@ -2810,7 +2814,7 @@ class ABW_Abilities_Registration
                 'id'      => $post->ID,
                 'title'   => $post->post_title,
                 'type'    => $post->post_type,
-                'excerpt' => wp_trim_words(strip_tags($post->post_content), 30),
+                'excerpt' => wp_trim_words(wp_strip_all_tags($post->post_content), 30),
             ];
         }
 
@@ -3384,7 +3388,14 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
-        $tables = $wpdb->get_results("SHOW TABLE STATUS FROM `" . DB_NAME . "`", ARRAY_A);
+        $database_name = preg_replace('/[^A-Za-z0-9_]/', '', DB_NAME);
+
+        if (empty($database_name)) {
+            return new WP_Error('db_error', __('Failed to determine the database name.', 'abw-ai'));
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        $tables = $wpdb->get_results("SHOW TABLE STATUS FROM `{$database_name}`", ARRAY_A);
 
         if ($tables === null || $tables === false) {
             return new WP_Error('db_error', __('Failed to retrieve database table status.', 'abw-ai'));
@@ -3522,7 +3533,12 @@ class ABW_Abilities_Registration
         $results = [];
 
         foreach ($tables as $table) {
-            $safe_table = esc_sql($table);
+            $safe_table = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+            if ('' === $safe_table) {
+                continue;
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
             $status     = $wpdb->get_results("OPTIMIZE TABLE `{$safe_table}`", ARRAY_A);
 
             $results[] = [
@@ -3627,7 +3643,12 @@ class ABW_Abilities_Registration
             'success'       => true,
             'hook'          => $hook,
             'events_removed' => $count,
-            'message'       => sprintf(__('Cleared %d scheduled event(s) for hook "%s".', 'abw-ai'), $count, $hook),
+            'message'       => sprintf(
+                /* translators: 1: number of scheduled events, 2: cron hook name */
+                __('Cleared %1$d scheduled event(s) for hook "%2$s".', 'abw-ai'),
+                $count,
+                $hook
+            ),
         ];
     }
 
@@ -3643,10 +3664,12 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $expired = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} o1 "
             . "JOIN {$wpdb->options} o2 ON o2.option_name = CONCAT('_transient_timeout_', SUBSTRING(o1.option_name, 12)) "
@@ -3674,6 +3697,7 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $expired_timeouts = $wpdb->get_col(
             "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_%' AND option_value < UNIX_TIMESTAMP()"
         );
@@ -3683,11 +3707,13 @@ class ABW_Abilities_Registration
         foreach ($expired_timeouts as $timeout_name) {
             $transient_name = str_replace('_transient_timeout_', '_transient_', $timeout_name);
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$wpdb->options} WHERE option_name = %s",
                 $transient_name
             ));
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$wpdb->options} WHERE option_name = %s",
                 $timeout_name
@@ -3714,11 +3740,13 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $results = $wpdb->get_results(
             "SELECT option_name, LENGTH(option_value) as size FROM {$wpdb->options} WHERE autoload = 'yes' ORDER BY LENGTH(option_value) DESC LIMIT 30",
             ARRAY_A
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total = (int) $wpdb->get_var(
             "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
         );
@@ -3752,6 +3780,7 @@ class ABW_Abilities_Registration
 
         $active_plugins = get_option('active_plugins', []);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $autoload_size = (int) $wpdb->get_var(
             "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
         );
@@ -3766,11 +3795,14 @@ class ABW_Abilities_Registration
             }
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total_transients = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $post_count    = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'publish'");
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $revision_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'");
 
         return [

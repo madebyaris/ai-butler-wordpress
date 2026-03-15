@@ -116,12 +116,12 @@ class ABW_Security_Tools {
 		global $wpdb;
 
 		// Try Wordfence table first.
-		$wf_table = $wpdb->base_prefix . 'wfLogins';
+		$wf_table = preg_replace( '/[^A-Za-z0-9_]/', '', $wpdb->base_prefix . 'wfLogins' );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$wf_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wf_table ) );
 
 		if ( $wf_exists ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
 					"SELECT IP AS ip, username, ctime AS time
@@ -465,6 +465,7 @@ class ABW_Security_Tools {
 		}
 
 		$params = stream_context_get_params( $client );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing an SSL socket resource after inspection.
 		fclose( $client );
 
 		if ( empty( $params['options']['ssl']['peer_certificate'] ) ) {

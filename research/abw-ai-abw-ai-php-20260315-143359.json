@@ -1,0 +1,1438 @@
+{
+    "generated_at": "2026-03-15 14:33:59",
+    "plugin": "ABW-AI - Advanced Butler WordPress AI",
+    "results": {
+        "includes/class-ai-tools.php": [
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-tools.php&line=979",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 979,
+                "column": 17
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-tools.php&line=1561",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1561,
+                "column": 19
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-tools.php&line=1561",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1561,
+                "column": 19
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-tools.php&line=1586",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1586,
+                "column": 27
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-tools.php&line=1586",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1586,
+                "column": 27
+            }
+        ],
+        "includes/class-chat-interface.php": [
+            {
+                "message": "Processing form data without nonce verification.",
+                "code": "WordPress.Security.NonceVerification.Recommended",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=142",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 142,
+                "column": 33
+            },
+            {
+                "message": "Processing form data without nonce verification.",
+                "code": "WordPress.Security.NonceVerification.Recommended",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=142",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 142,
+                "column": 104
+            },
+            {
+                "message": "Detected usage of a non-sanitized input variable: $_POST[&#039;context&#039;]",
+                "code": "WordPress.Security.ValidatedSanitizedInput.InputNotSanitized",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=567",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 567,
+                "column": 75
+            },
+            {
+                "message": "Processing form data without nonce verification.",
+                "code": "WordPress.Security.NonceVerification.Missing",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=1436",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1436,
+                "column": 65
+            },
+            {
+                "message": "Processing form data without nonce verification.",
+                "code": "WordPress.Security.NonceVerification.Missing",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=1436",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1436,
+                "column": 119
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-chat-interface.php&line=2060",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 2060,
+                "column": 33
+            }
+        ],
+        "includes/class-ai-router.php": [
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=114",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 114,
+                "column": 17
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=394",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 394,
+                "column": 21
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=404",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 404,
+                "column": 17
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=410",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 410,
+                "column": 13
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=427",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 427,
+                "column": 23
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=430",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 430,
+                "column": 13
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=440",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 440,
+                "column": 17
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=908",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 908,
+                "column": 57
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=928",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 928,
+                "column": 58
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=954",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 954,
+                "column": 17
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1274",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1274,
+                "column": 40
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1276",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1276,
+                "column": 17
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1299",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1299,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1302",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1302,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1305",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1305,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1315",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1315,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1323",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1323,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1324",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1324,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1332",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1332,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1339",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1339,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1345",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1345,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1351",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1351,
+                "column": 42
+            },
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-ai-router.php&line=1354",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 1354,
+                "column": 42
+            }
+        ],
+        "includes/class-brand-voice.php": [
+            {
+                "message": "A function call to __() with texts containing placeholders was found, but was not accompanied by a \"translators:\" comment on the line above to clarify the meaning of the placeholders.",
+                "code": "WordPress.WP.I18n.MissingTranslatorsComment",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-brand-voice.php&line=135",
+                "docs": "https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/#descriptions",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 135,
+                "column": 21
+            }
+        ],
+        "includes/class-debug-log.php": [
+            {
+                "message": "File operations should use WP_Filesystem methods instead of direct PHP filesystem calls. Found: is_writable().",
+                "code": "WordPress.WP.AlternativeFunctions.file_system_operations_is_writable",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-debug-log.php&line=66",
+                "docs": "",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 66,
+                "column": 28
+            },
+            {
+                "message": "rename() is discouraged. Use WP_Filesystem::move() to rename a file.",
+                "code": "WordPress.WP.AlternativeFunctions.rename_rename",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-debug-log.php&line=111",
+                "docs": "",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 111,
+                "column": 4
+            }
+        ],
+        "includes/class-security-tools.php": [
+            {
+                "message": "Unescaped parameter $wf_table used in $wpdb-&gt;get_results($wpdb-&gt;prepare(\\n\\t\\t\\t\\t\\t&quot;SELECT IP AS ip, username, ctime AS time\\n\\t\\t\\t\\t\\t FROM {$wf_table}\\n\\t\\t\\t\\t\\t WHERE fail = 1\\n\\t\\t\\t\\t\\t ORDER BY ctime DESC\\n\\t\\t\\t\\t\\t LIMIT %d&quot;,\\n\\t\\t\\t\\t\\t$limit\\n\\t\\t\\t\\t))\\n$wf_table assigned unsafely at line 119:\\n $wf_table = preg_replace( &#039;/[^A-Za-z0-9_]/&#039;, &#039;&#039;, $wpdb-&gt;base_prefix . &#039;wfLogins&#039; )",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-security-tools.php&line=125",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 125,
+                "column": 19
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$wf_table} at \\t\\t\\t\\t\\t FROM {$wf_table}\\n",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-security-tools.php&line=128",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 128,
+                "column": 1
+            },
+            {
+                "message": "File operations should use WP_Filesystem methods instead of direct PHP filesystem calls. Found: fclose().",
+                "code": "WordPress.WP.AlternativeFunctions.file_system_operations_fclose",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-security-tools.php&line=468",
+                "docs": "",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 468,
+                "column": 3
+            }
+        ],
+        "includes/class-abilities-registration.php": [
+            {
+                "message": "unlink() is discouraged. Use wp_delete_file() to delete a file.",
+                "code": "WordPress.WP.AlternativeFunctions.unlink_unlink",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=2214",
+                "docs": "",
+                "severity": 5,
+                "type": "ERROR",
+                "line": 2214,
+                "column": 14
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3398",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3398,
+                "column": 19
+            },
+            {
+                "message": "Unescaped parameter $database_name used in $wpdb-&gt;get_results(&quot;SHOW TABLE STATUS FROM `{$database_name}`&quot;)\\n$database_name assigned unsafely at line 3391:\\n $database_name = preg_replace(&#039;/[^A-Za-z0-9_]/&#039;, &#039;&#039;, DB_NAME)",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3398",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3398,
+                "column": 26
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3462",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3462,
+                "column": 51
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3462",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3462,
+                "column": 51
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3468",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3468,
+                "column": 53
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3468",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3468,
+                "column": 53
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3474",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3474,
+                "column": 55
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3474",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3474,
+                "column": 55
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3480",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3480,
+                "column": 55
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3480",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3480,
+                "column": 55
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3486",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3486,
+                "column": 58
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3486",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3486,
+                "column": 58
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3492",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3492,
+                "column": 60
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3492",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3492,
+                "column": 60
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3499",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3499,
+                "column": 47
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3499",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3499,
+                "column": 47
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3521",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3521,
+                "column": 19
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3521",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3521,
+                "column": 19
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3542",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3542,
+                "column": 27
+            },
+            {
+                "message": "Unescaped parameter $safe_table used in $wpdb-&gt;get_results(&quot;OPTIMIZE TABLE `{$safe_table}`&quot;)\\n$safe_table assigned unsafely at line 3536:\\n $safe_table = preg_replace(&#039;/[^A-Za-z0-9_]/&#039;, &#039;&#039;, $table)",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3542",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3542,
+                "column": 34
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3667",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3667,
+                "column": 24
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3667",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3667,
+                "column": 24
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3671",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3671,
+                "column": 26
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3671",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3671,
+                "column": 26
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3698",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3698,
+                "column": 29
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3698",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3698,
+                "column": 29
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3707",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3707,
+                "column": 13
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3707",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3707,
+                "column": 13
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3712",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3712,
+                "column": 13
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3712",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3712,
+                "column": 13
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3738",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3738,
+                "column": 20
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3738",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3738,
+                "column": 20
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3743",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3743,
+                "column": 24
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3743",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3743,
+                "column": 24
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3776",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3776,
+                "column": 32
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3776",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3776,
+                "column": 32
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3790",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3790,
+                "column": 35
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3790",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3790,
+                "column": 35
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3794",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3794,
+                "column": 32
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3794",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3794,
+                "column": 32
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3795",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3795,
+                "column": 33
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3795",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3795,
+                "column": 33
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3998",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3998,
+                "column": 30
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-abilities-registration.php&line=3998",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 3998,
+                "column": 30
+            }
+        ],
+        ".gitignore": [
+            {
+                "message": "Hidden files are not permitted.",
+                "code": "hidden_files",
+                "link": null,
+                "docs": "",
+                "severity": 8,
+                "type": "WARNING",
+                "line": 0,
+                "column": 0
+            }
+        ],
+        "includes/class-background-jobs.php": [
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=210",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 210,
+                "column": 9
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=210",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 210,
+                "column": 9
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;query(&quot;DROP TABLE IF EXISTS {$table_name}&quot;)\\n$table_name assigned unsafely at line 208:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=210",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 210,
+                "column": 10
+            },
+            {
+                "message": "Attempting a database schema change is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.SchemaChange",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=210",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 210,
+                "column": 23
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=265",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 265,
+                "column": 19
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=305",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 305,
+                "column": 16
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_row($wpdb-&gt;prepare( &quot;SELECT * FROM {$table_name} WHERE id = %d&quot;, $job_id ))\\n$table_name assigned unsafely at line 302:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=305",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 305,
+                "column": 17
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=320",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 320,
+                "column": 16
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_row($wpdb-&gt;prepare( &quot;SELECT * FROM {$table_name} WHERE job_token = %s&quot;, $job_token ))\\n$table_name assigned unsafely at line 317:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=320",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 320,
+                "column": 17
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=335",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 335,
+                "column": 23
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_results($wpdb-&gt;prepare(\\n\\t\\t\\t\\t&quot;SELECT job_token, job_type, status, input_data, created_at\\n\\t\\t\\t\\t FROM {$table_name}\\n\\t\\t\\t\\t WHERE user_id = %d AND status IN (%s, %s)\\n\\t\\t\\t\\t ORDER BY created_at ASC&quot;,\\n\\t\\t\\t\\t$user_id,\\n\\t\\t\\t\\tself::STATUS_PENDING,\\n\\t\\t\\t\\tself::STATUS_PROCESSING\\n\\t\\t\\t))\\n$table_name assigned unsafely at line 333:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=335",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 335,
+                "column": 24
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at \\t\\t\\t\\t FROM {$table_name}\\n",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=338",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 338,
+                "column": 1
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=395",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 395,
+                "column": 19
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;query($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;UPDATE {$table_name} SET status = %s, started_at = %s, timeout_at = %s, attempts = attempts + 1 WHERE id = %d AND status = %s&quot;,\\n\\t\\t\\tself::STATUS_PROCESSING,\\n\\t\\t\\t$now,\\n\\t\\t\\t$timeout_at,\\n\\t\\t\\t$job_id,\\n\\t\\t\\tself::STATUS_PENDING\\n\\t\\t))\\n$table_name assigned unsafely at line 387:\\n $table_name   = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=395",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 395,
+                "column": 20
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;UPDATE {$table_name} SET status = %s, started_at = %s, timeout_at = %s, attempts = attempts + 1 WHERE id = %d AND status = %s&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=396",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 396,
+                "column": 4
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=418",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 418,
+                "column": 9
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=418",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 418,
+                "column": 9
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=442",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 442,
+                "column": 9
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=442",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 442,
+                "column": 9
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=466",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 466,
+                "column": 20
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=466",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 466,
+                "column": 20
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=506",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 506,
+                "column": 13
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=506",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 506,
+                "column": 13
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=521",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 521,
+                "column": 13
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=521",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 521,
+                "column": 13
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=793",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 793,
+                "column": 16
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_row($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;SELECT id FROM {$table_name} WHERE status = %s ORDER BY created_at ASC LIMIT 1&quot;,\\n\\t\\t\\tself::STATUS_PENDING\\n\\t\\t))\\n$table_name assigned unsafely at line 789:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=793",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 793,
+                "column": 17
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;SELECT id FROM {$table_name} WHERE status = %s ORDER BY created_at ASC LIMIT 1&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=794",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 794,
+                "column": 4
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=905",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 905,
+                "column": 23
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_results($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;SELECT id, attempts, max_attempts FROM {$table_name} WHERE status = %s AND timeout_at IS NOT NULL AND timeout_at &lt; %s&quot;,\\n\\t\\t\\tself::STATUS_PROCESSING,\\n\\t\\t\\t$now\\n\\t\\t))\\n$table_name assigned unsafely at line 900:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=905",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 905,
+                "column": 24
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;SELECT id, attempts, max_attempts FROM {$table_name} WHERE status = %s AND timeout_at IS NOT NULL AND timeout_at &lt; %s&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=906",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 906,
+                "column": 4
+            },
+            {
+                "message": "Use of a direct database call is discouraged.",
+                "code": "WordPress.DB.DirectDatabaseQuery.DirectQuery",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=921",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 921,
+                "column": 17
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=921",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 921,
+                "column": 17
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=946",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 946,
+                "column": 9
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;query($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 7 DAY)&quot;,\\n\\t\\t\\tself::STATUS_COMPLETED,\\n\\t\\t\\tcurrent_time( &#039;mysql&#039; )\\n\\t\\t))\\n$table_name assigned unsafely at line 942:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=946",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 946,
+                "column": 10
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 7 DAY)&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=947",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 947,
+                "column": 4
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=954",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 954,
+                "column": 9
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;query($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 30 DAY)&quot;,\\n\\t\\t\\tself::STATUS_FAILED,\\n\\t\\t\\tcurrent_time( &#039;mysql&#039; )\\n\\t\\t))\\n$table_name assigned unsafely at line 942:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=954",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 954,
+                "column": 10
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 30 DAY)&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=955",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 955,
+                "column": 4
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=962",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 962,
+                "column": 9
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;query($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 7 DAY)&quot;,\\n\\t\\t\\tself::STATUS_CANCELLED,\\n\\t\\t\\tcurrent_time( &#039;mysql&#039; )\\n\\t\\t))\\n$table_name assigned unsafely at line 942:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=962",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 962,
+                "column": 10
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;DELETE FROM {$table_name} WHERE status = %s AND completed_at &lt; DATE_SUB(%s, INTERVAL 7 DAY)&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=963",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 963,
+                "column": 4
+            },
+            {
+                "message": "Detected usage of a non-sanitized input variable: $_POST[&#039;job_id&#039;]",
+                "code": "WordPress.Security.ValidatedSanitizedInput.InputNotSanitized",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1050",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1050,
+                "column": 59
+            },
+            {
+                "message": "Detected usage of a non-sanitized input variable: $_POST[&#039;job_id&#039;]",
+                "code": "WordPress.Security.ValidatedSanitizedInput.InputNotSanitized",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1077",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1077,
+                "column": 59
+            },
+            {
+                "message": "Detected usage of a non-sanitized input variable: $_POST[&#039;page&#039;]",
+                "code": "WordPress.Security.ValidatedSanitizedInput.InputNotSanitized",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1105",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1105,
+                "column": 69
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_var(&quot;SELECT COUNT(*) FROM {$table_name}&quot;)\\n$table_name assigned unsafely at line 1104:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1111",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1111,
+                "column": 25
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1115",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1115,
+                "column": 17
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_results($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;SELECT id, user_id, job_type, status, error_message, attempts, max_attempts, created_at, started_at, completed_at FROM {$table_name} ORDER BY created_at DESC LIMIT %d OFFSET %d&quot;,\\n\\t\\t\\t$per_page,\\n\\t\\t\\t$offset\\n\\t\\t))\\n$table_name assigned unsafely at line 1104:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1115",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1115,
+                "column": 18
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;SELECT id, user_id, job_type, status, error_message, attempts, max_attempts, created_at, started_at, completed_at FROM {$table_name} ORDER BY created_at DESC LIMIT %d OFFSET %d&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1116",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1116,
+                "column": 4
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_results(&quot;SELECT status, COUNT(*) as count FROM {$table_name} GROUP BY status&quot;)\\n$table_name assigned unsafely at line 1160:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1163",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1163,
+                "column": 21
+            },
+            {
+                "message": "Direct database call without caching detected. Consider using wp_cache_get() / wp_cache_set() or wp_cache_delete().",
+                "code": "WordPress.DB.DirectDatabaseQuery.NoCaching",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1194",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1194,
+                "column": 16
+            },
+            {
+                "message": "Unescaped parameter $table_name used in $wpdb-&gt;get_results($wpdb-&gt;prepare(\\n\\t\\t\\t&quot;SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d&quot;,\\n\\t\\t\\t$limit\\n\\t\\t))\\n$table_name assigned unsafely at line 1191:\\n $table_name = self::get_table_name_sql()",
+                "code": "PluginCheck.Security.DirectDB.UnescapedDBParameter",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1194",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1194,
+                "column": 17
+            },
+            {
+                "message": "Use placeholders and $wpdb-&gt;prepare(); found interpolated variable {$table_name} at &quot;SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d&quot;",
+                "code": "WordPress.DB.PreparedSQL.InterpolatedNotPrepared",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fincludes%2Fclass-background-jobs.php&line=1195",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 1195,
+                "column": 4
+            }
+        ],
+        "readme.txt": [
+            {
+                "message": "The plugin name includes a restricted term. Your chosen plugin name - \"ABW-AI - Advanced Butler WordPress AI\" - contains the restricted term \"wordpress\" which cannot be used at all in your plugin name.",
+                "code": "trademarked_term",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Freadme.txt",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 0,
+                "column": 0
+            }
+        ],
+        "abw-ai.php": [
+            {
+                "message": "The plugin name includes a restricted term. Your chosen plugin name - \"ABW-AI - Advanced Butler WordPress AI\" - contains the restricted term \"wordpress\" which cannot be used at all in your plugin name.",
+                "code": "trademarked_term",
+                "link": "https://barengmember.applocal/wp-admin/plugin-editor.php?plugin=abw-ai%2Fabw-ai.php&file=abw-ai%2Fabw-ai.php",
+                "docs": "",
+                "severity": 5,
+                "type": "WARNING",
+                "line": 0,
+                "column": 0
+            }
+        ]
+    }
+}
