@@ -63,7 +63,7 @@ class ABW_Debug_Log {
 		if ( ! file_exists( $htaccess ) ) {
 			file_put_contents( $htaccess, "Order deny,allow\nDeny from all\n" );
 		}
-		return is_dir( $dir ) && is_writable( $dir );
+		return is_dir( $dir ) && wp_is_writable( $dir );
 	}
 
 	/**
@@ -108,6 +108,7 @@ class ABW_Debug_Log {
 		// Rotate if file is too large.
 		if ( file_exists( $file ) && filesize( $file ) >= self::MAX_FILE_SIZE ) {
 			$rotated = $file . '.' . gmdate( 'His' ) . '.old';
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Internal log rotation for plugin-owned files.
 			rename( $file, $rotated );
 		}
 

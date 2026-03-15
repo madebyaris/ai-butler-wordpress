@@ -185,6 +185,14 @@ class ABW_Abilities_Registration
                         'description' => 'New post status',
                         'enum'        => ['publish', 'draft', 'pending', 'private', 'trash'],
                     ],
+                    'lookup_title' => [
+                        'type'        => 'string',
+                        'description' => 'Optional exact current post title to resolve the target safely when no reliable ID is known',
+                    ],
+                    'post_type' => [
+                        'type'        => 'string',
+                        'description' => 'Optional post type filter when resolving by lookup_title',
+                    ],
                 ],
             ],
             'execute_callback'   => [__CLASS__, 'execute_update_post'],
@@ -430,90 +438,6 @@ class ABW_Abilities_Registration
             'execute_callback'   => [__CLASS__, 'execute_update_site_identity'],
             'permission_callback' => [__CLASS__, 'check_admin_permission'],
         ]);
-
-        // =====================
-        // Elementor Abilities (if Elementor is active)
-        // =====================
-        if (class_exists('\Elementor\Plugin')) {
-            wp_register_ability('abw-ai/list-elementor-pages', [
-                'label'       => __('List Elementor Pages', 'abw-ai'),
-                'description' => __('List pages built with Elementor', 'abw-ai'),
-                'category'    => 'abw-ai',
-                'input_schema' => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'per_page' => [
-                            'type'        => 'integer',
-                            'description' => 'Pages per page',
-                            'default'     => 20,
-                        ],
-                    ],
-                ],
-                'execute_callback'   => [__CLASS__, 'execute_list_elementor_pages'],
-                'permission_callback' => [__CLASS__, 'check_read_permission'],
-            ]);
-
-            wp_register_ability('abw-ai/get-elementor-page', [
-                'label'       => __('Get Elementor Page', 'abw-ai'),
-                'description' => __('Get Elementor page data including elements', 'abw-ai'),
-                'category'    => 'abw-ai',
-                'input_schema' => [
-                    'type'       => 'object',
-                    'required'   => ['id'],
-                    'properties' => [
-                        'id' => [
-                            'type'        => 'integer',
-                            'description' => 'Page ID',
-                        ],
-                    ],
-                ],
-                'execute_callback'   => [__CLASS__, 'execute_get_elementor_page'],
-                'permission_callback' => [__CLASS__, 'check_read_permission'],
-            ]);
-
-            wp_register_ability('abw-ai/update-elementor-page', [
-                'label'       => __('Update Elementor Page', 'abw-ai'),
-                'description' => __('Update Elementor page content and settings', 'abw-ai'),
-                'category'    => 'abw-ai',
-                'input_schema' => [
-                    'type'       => 'object',
-                    'required'   => ['id'],
-                    'properties' => [
-                        'id' => [
-                            'type'        => 'integer',
-                            'description' => 'Page ID to update',
-                        ],
-                        'elements' => [
-                            'type'        => 'array',
-                            'description' => 'Elementor elements data',
-                        ],
-                        'settings' => [
-                            'type'        => 'object',
-                            'description' => 'Page settings',
-                        ],
-                    ],
-                ],
-                'execute_callback'   => [__CLASS__, 'execute_update_elementor_page'],
-                'permission_callback' => [__CLASS__, 'check_write_permission'],
-            ]);
-
-            wp_register_ability('abw-ai/list-elementor-templates', [
-                'label'       => __('List Elementor Templates', 'abw-ai'),
-                'description' => __('List saved Elementor templates', 'abw-ai'),
-                'category'    => 'abw-ai',
-                'input_schema' => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'per_page' => [
-                            'type'        => 'integer',
-                            'default'     => 20,
-                        ],
-                    ],
-                ],
-                'execute_callback'   => [__CLASS__, 'execute_list_elementor_templates'],
-                'permission_callback' => [__CLASS__, 'check_read_permission'],
-            ]);
-        }
 
         // =====================
         // Menu Abilities
@@ -1571,7 +1495,7 @@ class ABW_Abilities_Registration
      */
     public static function check_read_permission()
     {
-        return current_user_can('read');
+        return current_user_can('manage_options');
     }
 
     /**
@@ -1579,7 +1503,7 @@ class ABW_Abilities_Registration
      */
     public static function check_write_permission()
     {
-        return current_user_can('edit_posts');
+        return current_user_can('manage_options');
     }
 
     /**
@@ -1685,8 +1609,11 @@ class ABW_Abilities_Registration
         }
 
         return [
-            'id'      => $post_id,
-            'success' => true,
+            'id'       => $post_id,
+            'success'  => true,
+            'title'    => get_the_title($post_id),
+            'status'   => get_post_status($post_id),
+            'edit_url' => get_edit_post_link($post_id, 'raw'),
         ];
     }
 
@@ -1695,7 +1622,13 @@ class ABW_Abilities_Registration
      */
     public static function execute_update_post($input)
     {
-        $post_data = ['ID' => $input['id']];
+        $resolved = self::resolve_post_for_update($input);
+        if (is_wp_error($resolved)) {
+            return $resolved;
+        }
+
+        $post_id   = (int) $resolved['id'];
+        $post_data = ['ID' => $post_id];
 
         if (isset($input['title'])) {
             $post_data['post_title'] = sanitize_text_field($input['title']);
@@ -1704,7 +1637,7 @@ class ABW_Abilities_Registration
             $post_data['post_content'] = wp_kses_post($input['content']);
         }
         if (isset($input['status'])) {
-            $post_data['post_status'] = $input['status'];
+            $post_data['post_status'] = sanitize_key($input['status']);
         }
 
         $result = wp_update_post($post_data, true);
@@ -1714,8 +1647,79 @@ class ABW_Abilities_Registration
         }
 
         return [
-            'id'      => $input['id'],
-            'success' => true,
+            'id'            => $post_id,
+            'success'       => true,
+            'title'         => get_the_title($post_id),
+            'status'        => get_post_status($post_id),
+            'edit_url'      => get_edit_post_link($post_id, 'raw'),
+            'resolved_from' => $resolved['resolved_from'],
+        ];
+    }
+
+    /**
+     * Resolve a target post for update operations.
+     *
+     * @param array $input Update input.
+     * @return array|WP_Error
+     */
+    private static function resolve_post_for_update($input)
+    {
+        $post_id = absint($input['id'] ?? 0);
+        if ($post_id > 0) {
+            $post = get_post($post_id);
+            if ($post instanceof WP_Post) {
+                return [
+                    'id'            => $post_id,
+                    'resolved_from' => 'id',
+                ];
+            }
+        }
+
+        $lookup_title = sanitize_text_field($input['lookup_title'] ?? '');
+        if ('' === $lookup_title) {
+            return new WP_Error(
+                'invalid_post_id',
+                __('Invalid post ID. Use list_posts/get_post first or provide lookup_title for exact title matching.', 'abw-ai')
+            );
+        }
+
+        $post_type = sanitize_key($input['post_type'] ?? '');
+        $args = [
+            'post_status'      => 'any',
+            'posts_per_page'   => 2,
+            'orderby'          => 'ID',
+            'order'            => 'DESC',
+            'title'            => $lookup_title,
+            'suppress_filters' => false,
+            'fields'           => 'ids',
+        ];
+
+        if ('' !== $post_type) {
+            $args['post_type'] = $post_type;
+        } else {
+            $args['post_type'] = 'any';
+        }
+
+        $matches   = get_posts($args);
+        $match_cnt = is_array($matches) ? count($matches) : 0;
+
+        if (1 !== $match_cnt) {
+            if ($match_cnt > 1) {
+                return new WP_Error(
+                    'ambiguous_post',
+                    __('Multiple posts matched lookup_title. Use the exact post ID from list_posts instead.', 'abw-ai')
+                );
+            }
+
+            return new WP_Error(
+                'post_not_found',
+                __('No post matched lookup_title. Use list_posts first to confirm the exact title and ID.', 'abw-ai')
+            );
+        }
+
+        return [
+            'id'            => (int) $matches[0],
+            'resolved_from' => 'lookup_title',
         ];
     }
 
@@ -2102,121 +2106,6 @@ class ABW_Abilities_Registration
     }
 
     /**
-     * Execute list Elementor pages ability
-     */
-    public static function execute_list_elementor_pages($input)
-    {
-        $args = [
-            'post_type'      => 'page',
-            'posts_per_page' => $input['per_page'] ?? 20,
-            'meta_query'     => [
-                [
-                    'key'   => '_elementor_edit_mode',
-                    'value' => 'builder',
-                ],
-            ],
-        ];
-
-        $query = new WP_Query($args);
-        $pages = [];
-
-        foreach ($query->posts as $post) {
-            $pages[] = [
-                'id'     => $post->ID,
-                'title'  => $post->post_title,
-                'slug'   => $post->post_name,
-                'status' => $post->post_status,
-            ];
-        }
-
-        return [
-            'pages' => $pages,
-            'total' => $query->found_posts,
-        ];
-    }
-
-    /**
-     * Execute get Elementor page ability
-     */
-    public static function execute_get_elementor_page($input)
-    {
-        $page = get_post($input['id']);
-
-        if (! $page) {
-            return new WP_Error('not_found', 'Page not found');
-        }
-
-        $elementor_data = get_post_meta($input['id'], '_elementor_data', true);
-
-        return [
-            'id'             => $page->ID,
-            'title'          => $page->post_title,
-            'status'         => $page->post_status,
-            'elementor_data' => $elementor_data ? json_decode($elementor_data, true) : null,
-        ];
-    }
-
-    /**
-     * Execute update Elementor page ability
-     */
-    public static function execute_update_elementor_page($input)
-    {
-        $document = \Elementor\Plugin::$instance->documents->get($input['id'], false);
-
-        if (! $document) {
-            return new WP_Error('not_found', 'Document not found');
-        }
-
-        if (! $document->is_built_with_elementor()) {
-            $document->set_is_built_with_elementor(true);
-        }
-
-        $save_data = [];
-
-        if (isset($input['elements'])) {
-            $save_data['elements'] = $input['elements'];
-        }
-
-        if (isset($input['settings'])) {
-            $save_data['settings'] = $input['settings'];
-        }
-
-        $saved = $document->save($save_data);
-
-        return [
-            'id'      => $input['id'],
-            'success' => (bool) $saved,
-        ];
-    }
-
-    /**
-     * Execute list Elementor templates ability
-     */
-    public static function execute_list_elementor_templates($input)
-    {
-        $args = [
-            'post_type'      => 'elementor_library',
-            'posts_per_page' => $input['per_page'] ?? 20,
-        ];
-
-        $query     = new WP_Query($args);
-        $templates = [];
-
-        foreach ($query->posts as $post) {
-            $templates[] = [
-                'id'    => $post->ID,
-                'title' => $post->post_title,
-                'type'  => get_post_meta($post->ID, '_elementor_template_type', true),
-            ];
-        }
-
-        return [
-            'templates' => $templates,
-            'total'     => $query->found_posts,
-        ];
-    }
-
-    /**
      * Execute list menus ability
      */
     public static function execute_list_menus($input)
@@ -2322,7 +2211,7 @@ class ABW_Abilities_Registration
 
         $id = media_handle_sideload($file_array, 0);
         if (is_wp_error($id)) {
-            @unlink($tmp);
+            wp_delete_file($tmp);
             return $id;
         }
 
@@ -2799,10 +2688,17 @@ class ABW_Abilities_Registration
      */
     public static function execute_get_option($input)
     {
-        $value = get_option($input['option']);
+        $whitelist = self::get_safe_option_whitelist();
+        $option    = sanitize_key($input['option'] ?? '');
+
+        if (! in_array($option, $whitelist, true)) {
+            return new WP_Error('not_allowed', __('This option is not allowed to be read via API.', 'abw-ai'));
+        }
+
+        $value = get_option($option);
 
         return [
-            'option' => $input['option'],
+            'option' => $option,
             'value'  => $value,
         ];
     }
@@ -2812,8 +2708,28 @@ class ABW_Abilities_Registration
      */
     public static function execute_update_option($input)
     {
-        // Whitelist of safe options
-        $whitelist = [
+        $whitelist = self::get_safe_option_whitelist();
+        $option    = sanitize_key($input['option'] ?? '');
+
+        if (! in_array($option, $whitelist, true)) {
+            return new WP_Error('not_allowed', __('This option is not allowed to be updated via API.', 'abw-ai'));
+        }
+
+        $result = update_option($option, $input['value']);
+
+        return [
+            'success' => $result,
+        ];
+    }
+
+    /**
+     * Get the list of safe options that may be read or updated through tools.
+     *
+     * @return array<int, string>
+     */
+    private static function get_safe_option_whitelist()
+    {
+        return [
             'blogname',
             'blogdescription',
             'admin_email',
@@ -2826,16 +2742,14 @@ class ABW_Abilities_Registration
             'posts_per_page',
             'default_ping_status',
             'default_comment_status',
-        ];
-
-        if (! in_array($input['option'], $whitelist, true)) {
-            return new WP_Error('not_allowed', __('This option is not allowed to be updated via API.', 'abw-ai'));
-        }
-
-        $result = update_option($input['option'], $input['value']);
-
-        return [
-            'success' => $result,
+            'abw_ai_provider',
+            'abw_chat_enabled',
+            'abw_custom_endpoint',
+            'abw_custom_model',
+            'abw_rate_limit',
+            'abw_sidebar_default_state',
+            'abw_sidebar_default_width',
+            'abw_debug_log',
         ];
     }
 
@@ -2900,7 +2814,7 @@ class ABW_Abilities_Registration
                 'id'      => $post->ID,
                 'title'   => $post->post_title,
                 'type'    => $post->post_type,
-                'excerpt' => wp_trim_words(strip_tags($post->post_content), 30),
+                'excerpt' => wp_trim_words(wp_strip_all_tags($post->post_content), 30),
             ];
         }
 
@@ -3474,7 +3388,14 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
-        $tables = $wpdb->get_results("SHOW TABLE STATUS FROM `" . DB_NAME . "`", ARRAY_A);
+        $database_name = preg_replace('/[^A-Za-z0-9_]/', '', DB_NAME);
+
+        if (empty($database_name)) {
+            return new WP_Error('db_error', __('Failed to determine the database name.', 'abw-ai'));
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
+        $tables = $wpdb->get_results("SHOW TABLE STATUS FROM `{$database_name}`", ARRAY_A);
 
         if ($tables === null || $tables === false) {
             return new WP_Error('db_error', __('Failed to retrieve database table status.', 'abw-ai'));
@@ -3612,7 +3533,12 @@ class ABW_Abilities_Registration
         $results = [];
 
         foreach ($tables as $table) {
-            $safe_table = esc_sql($table);
+            $safe_table = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+            if ('' === $safe_table) {
+                continue;
+            }
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
             $status     = $wpdb->get_results("OPTIMIZE TABLE `{$safe_table}`", ARRAY_A);
 
             $results[] = [
@@ -3717,7 +3643,12 @@ class ABW_Abilities_Registration
             'success'       => true,
             'hook'          => $hook,
             'events_removed' => $count,
-            'message'       => sprintf(__('Cleared %d scheduled event(s) for hook "%s".', 'abw-ai'), $count, $hook),
+            'message'       => sprintf(
+                /* translators: 1: number of scheduled events, 2: cron hook name */
+                __('Cleared %1$d scheduled event(s) for hook "%2$s".', 'abw-ai'),
+                $count,
+                $hook
+            ),
         ];
     }
 
@@ -3733,10 +3664,12 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $expired = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} o1 "
             . "JOIN {$wpdb->options} o2 ON o2.option_name = CONCAT('_transient_timeout_', SUBSTRING(o1.option_name, 12)) "
@@ -3764,6 +3697,7 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $expired_timeouts = $wpdb->get_col(
             "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_%' AND option_value < UNIX_TIMESTAMP()"
         );
@@ -3773,11 +3707,13 @@ class ABW_Abilities_Registration
         foreach ($expired_timeouts as $timeout_name) {
             $transient_name = str_replace('_transient_timeout_', '_transient_', $timeout_name);
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$wpdb->options} WHERE option_name = %s",
                 $transient_name
             ));
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$wpdb->options} WHERE option_name = %s",
                 $timeout_name
@@ -3804,11 +3740,13 @@ class ABW_Abilities_Registration
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $results = $wpdb->get_results(
             "SELECT option_name, LENGTH(option_value) as size FROM {$wpdb->options} WHERE autoload = 'yes' ORDER BY LENGTH(option_value) DESC LIMIT 30",
             ARRAY_A
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total = (int) $wpdb->get_var(
             "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
         );
@@ -3842,6 +3780,7 @@ class ABW_Abilities_Registration
 
         $active_plugins = get_option('active_plugins', []);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $autoload_size = (int) $wpdb->get_var(
             "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
         );
@@ -3856,11 +3795,14 @@ class ABW_Abilities_Registration
             }
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $total_transients = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'"
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $post_count    = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'publish'");
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $revision_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'");
 
         return [

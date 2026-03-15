@@ -19,6 +19,7 @@
 		agentPollTimeout: null,
 		agentPollInFlight: false,
 		agentCompleted: false,
+		activeSessionId: null,
 		AGENT_POLL_INTERVAL_MS: 2000,
 		AGENT_POLL_MAX_MS: 60000
 	};
@@ -26,7 +27,7 @@
 	const ABW_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 	// DOM Elements
-	let $sidebar, $messages, $input, $sendBtn;
+	let $sidebar, $messages, $input, $sendBtn, initialMessagesHtml;
 
 	/**
 	 * Initialize the chat widget
@@ -38,6 +39,8 @@
 		$sendBtn = $('#abw-chat-send');
 
 		if (!$sidebar.length) return;
+
+		initialMessagesHtml = $messages.html();
 
 		// Check initial state from localStorage
 		const savedState = localStorage.getItem('abw_sidebar_state');
@@ -58,7 +61,7 @@
 	 * Bind event handlers
 	 */
 	function bindEvents() {
-		// Admin bar toggle (works for both standard admin bar and Elementor fallback)
+		// Admin bar toggle
 		$(document).on('click', '#wp-admin-bar-abw-sidebar-toggle a, .abw-sidebar-toggle-item a', function(e) {
 			e.preventDefault();
 			toggleSidebar();
@@ -338,7 +341,7 @@
 	 * Render or clear the pending confirmation card.
 	 */
 	function renderPendingConfirmation(confirmation) {
-		state.pendingConfirmation = confirmation || null;
+		state.pendingConfirmation = normalizeConfirmation(confirmation);
 		$('.abw-confirmation-message').remove();
 
 		if (!state.pendingConfirmation) {
@@ -370,6 +373,18 @@
 
 		$messages.append($message);
 		scrollToBottom();
+	}
+
+	function normalizeConfirmation(confirmation) {
+		if (!confirmation || Array.isArray(confirmation) || typeof confirmation !== 'object') {
+			return null;
+		}
+
+		if (!confirmation.tool && !confirmation.title && !confirmation.message && !Array.isArray(confirmation.details)) {
+			return null;
+		}
+
+		return confirmation;
 	}
 
 	/**
@@ -473,11 +488,7 @@
 	 * Build a scoped history key for the current surface.
 	 */
 	function getHistoryScope() {
-		const page = abwChat.currentPage || {};
-		if (page.post_id) {
-			return `admin_${page.screen || page.page || 'page'}_${page.post_id}`;
-		}
-		return `admin_${page.screen || page.page || 'global'}`;
+		return abwChat.globalHistoryScope || 'admin_global';
 	}
 
 	/**
@@ -545,7 +556,10 @@
 	 * Start polling for agentic session updates
 	 */
 	function startAgentPolling(sessionId) {
+		if (!sessionId) return;
+		if (state.activeSessionId === sessionId && state.agentPollInterval) return;
 		stopAgentPolling();
+		state.activeSessionId = sessionId;
 		state.agentPollTimeout = setTimeout(function() {
 			stopAgentPolling();
 			hideTypingIndicator();
@@ -625,6 +639,7 @@
 	 * Stop agentic polling
 	 */
 	function stopAgentPolling() {
+		state.activeSessionId = null;
 		if (state.agentPollTimeout) {
 			clearTimeout(state.agentPollTimeout);
 			state.agentPollTimeout = null;
@@ -900,6 +915,25 @@
 					});
 				}
 				renderPendingConfirmation(response.data && response.data.confirmation ? response.data.confirmation : null);
+				if (
+					response.success &&
+					response.data &&
+					response.data.active_session &&
+					response.data.active_session.status === 'thinking' &&
+					response.data.active_session.session_id
+				) {
+					showTypingIndicator();
+					updateAgentSteps(response.data.active_session.steps || []);
+					state.isLoading = true;
+					startAgentPolling(response.data.active_session.session_id);
+				}
+				if (response.success && response.data && Array.isArray(response.data.active_jobs)) {
+					response.data.active_jobs.forEach(function(jobInfo) {
+						if (jobInfo && jobInfo.job_token && !state.activeJobs[jobInfo.job_token]) {
+							startJobPolling(jobInfo);
+						}
+					});
+				}
 			}
 		});
 	}
@@ -923,20 +957,7 @@
 			success: function(response) {
 				if (response.success) {
 					renderPendingConfirmation(null);
-					// Clear messages and show welcome
-				$messages.html(`
-					<div class="abw-chat-welcome">
-						<p>Hi! I'm your Advanced Butler for WordPress. How can I help you today?</p>
-						<div class="abw-chat-suggestions">
-							<button class="abw-suggestion" data-prompt="List all my posts"><span class="dashicons dashicons-admin-post"></span> Posts</button>
-							<button class="abw-suggestion" data-prompt="List installed plugins"><span class="dashicons dashicons-admin-plugins"></span> Plugins</button>
-							<button class="abw-suggestion" data-prompt="Show me site health info"><span class="dashicons dashicons-heart"></span> Site Health</button>
-							<button class="abw-suggestion" data-prompt="Get database stats"><span class="dashicons dashicons-database"></span> Database</button>
-							<button class="abw-suggestion" data-prompt="Check for plugin updates"><span class="dashicons dashicons-update"></span> Updates</button>
-							<button class="abw-suggestion" data-prompt="Create a new blog post about"><span class="dashicons dashicons-edit"></span> Create Post</button>
-						</div>
-					</div>
-				`);
+					$messages.html(initialMessagesHtml || '');
 				}
 			}
 		});
@@ -952,6 +973,9 @@
 	function startJobPolling(jobInfo) {
 		const token = jobInfo.job_token;
 		const jobType = jobInfo.job_type || 'background_task';
+		if (!token || state.activeJobs[token]) {
+			return;
+		}
 
 		// Create a progress indicator in the chat.
 		const $progress = $(`
@@ -1069,10 +1093,15 @@
 		if (lower.includes('error') || lower.includes('issue') || lower.includes('problem')) {
 			suggestions.push({label: 'How to fix this?', prompt: 'How can I fix this issue?'});
 		}
+		if (lower.includes('brief') || lower.includes('opportunit') || lower.includes('review')) {
+			suggestions.push({label: 'Daily brief', prompt: 'Give me a daily brief for this site'});
+			suggestions.push({label: 'Find opportunities', prompt: 'What are the biggest opportunities on this site right now?'});
+		}
 
 		if (suggestions.length === 0) {
 			suggestions = [
 				{label: 'Tell me more', prompt: 'Tell me more about this'},
+				{label: 'Daily brief', prompt: 'Give me a daily brief for this site'},
 				{label: 'What else can you do?', prompt: 'What else can you help me with?'},
 			];
 		}

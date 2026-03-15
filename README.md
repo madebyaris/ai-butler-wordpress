@@ -2,7 +2,7 @@
 
 **Enhanced for [MiniMax](https://www.minimax.io)**
 
-An AI-powered assistant for WordPress that lives inside your admin dashboard. It can manage posts, users, media, plugins, themes, updates, menus, WooCommerce orders, Elementor layouts, and more -- all through natural language conversation. It also integrates natively with the WordPress Block Editor (Gutenberg) so you can ask it to write, edit, and structure content directly inside the editor.
+An AI-powered assistant for WordPress that lives inside your admin dashboard. It can manage posts, users, media, plugins, themes, updates, menus, WooCommerce orders, and more through natural language conversation. It also integrates natively with the WordPress Block Editor (Gutenberg) so you can ask it to write, edit, and structure content directly inside the editor.
 
 ABW-AI is enhanced for **MiniMax** models, taking advantage of their 1M token context window, fast inference speeds, and cost-effective pricing -- making it practical to send full page layouts and long editor contexts to the AI without worrying about token limits or response latency.
 
@@ -20,7 +20,6 @@ ABW-AI is enhanced for **MiniMax** models, taking advantage of their 1M token co
 - Node.js 18+ (only needed to rebuild the block editor sidebar from source)
 
 Optional:
-- **Elementor** -- enables AI-powered page layout management
 - **WooCommerce** -- enables product and order management tools
 
 ## Supported AI Providers
@@ -153,7 +152,6 @@ All available as AI tools the assistant can call during conversation:
 | **Site Health** | Health status and diagnostics |
 | **Block Editor** | Insert, replace, update, remove blocks; save post; update title/status |
 | **Block Themes** | List block patterns and template parts |
-| **Elementor** | List/get/update Elementor pages and templates |
 | **WooCommerce** | List/get products and orders, update statuses |
 
 ### Update Management (Check + Apply)
@@ -211,8 +209,7 @@ abw-ai/
 │   ├── class-ai-tools.php              # AI-powered writing/SEO tools
 │   ├── class-abilities-registration.php # WordPress tool registration
 │   ├── class-background-jobs.php        # Background job queue and processing
-│   ├── class-chat-interface.php         # Chat sidebar, AJAX handlers, block editor enqueue
-│   └── class-elementor-rest-api.php     # Elementor REST API extensions
+│   └── class-chat-interface.php         # Chat sidebar, AJAX handlers, block editor enqueue
 ├── assets/
 │   ├── js/chat-widget.js               # Vanilla JS chat sidebar (non-editor pages)
 │   ├── admin.js                         # Admin page scripts
@@ -260,6 +257,16 @@ Go to **ABW-AI > Settings** and select your provider:
 | API Key | Your key from [platform.minimax.io](https://platform.minimax.io) |
 | API Endpoint | `https://api.minimax.io/v1/chat/completions` |
 | Model Name | `MiniMax-M2.5` or `MiniMax-M2.5-highspeed` |
+
+## External Services
+
+ABW-AI connects to third-party AI APIs only when an administrator configures a provider and intentionally uses AI-powered features such as chat, content generation, rewriting, summarization, translation, SEO assistance, or connection testing.
+
+- **OpenAI**: sends user prompts, selected editor context, requested tool arguments, and AI responses to OpenAI's API. Privacy policy: [openai.com/policies/privacy-policy](https://openai.com/policies/privacy-policy)
+- **Anthropic**: sends user prompts, selected editor context, requested tool arguments, and AI responses to Anthropic's API. Privacy policy: [anthropic.com/legal/privacy](https://www.anthropic.com/legal/privacy)
+- **Custom/OpenAI-compatible provider**: sends the same categories of request data to the endpoint configured by the site administrator. Review that provider's privacy policy before enabling it.
+
+The plugin does not connect to these services until credentials are saved and an AI request is initiated from the WordPress admin.
 
 ## Development
 
@@ -311,4 +318,4 @@ ABW-AI is proudly sponsored by **MiniMax**. Their high-performance AI models wit
 
 ## License
 
-MIT -- see [LICENSE](https://opensource.org/licenses/MIT).
+GPL-2.0-or-later -- see `LICENSE`.

@@ -60,11 +60,9 @@ class ABW_Background_Jobs {
 	const BACKGROUND_JOB_TYPES = [
 		'generate_post_content',
 		'create_post',
-		'update_post',
 		'improve_content',
 		'translate_content',
 		'generate_css',
-		'update_elementor_page',
 		'generate_seo_meta',
 		'generate_faq',
 		'generate_schema_markup',
@@ -153,6 +151,15 @@ class ABW_Background_Jobs {
 	}
 
 	/**
+	 * Get a SQL-safe jobs table name.
+	 *
+	 * @return string
+	 */
+	private static function get_table_name_sql() {
+		return preg_replace( '/[^A-Za-z0-9_]/', '', self::get_table_name() );
+	}
+
+	/**
 	 * Create the background jobs database table.
 	 *
 	 * Called on plugin activation.
@@ -198,8 +205,8 @@ class ABW_Background_Jobs {
 	 */
 	public static function drop_table() {
 		global $wpdb;
-		$table_name = self::get_table_name();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$table_name = self::get_table_name_sql();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$wpdb->query( "DROP TABLE IF EXISTS {$table_name}" );
 		delete_option( 'abw_bg_jobs_db_version' );
 	}
@@ -252,7 +259,7 @@ class ABW_Background_Jobs {
 	public static function create_job( $user_id, $job_type, $data ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 		$job_token  = wp_generate_password( 64, false );
 
 		$result = $wpdb->insert(
@@ -292,9 +299,9 @@ class ABW_Background_Jobs {
 	public static function get_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_name} WHERE id = %d", $job_id ) );
 	}
 
@@ -307,10 +314,63 @@ class ABW_Background_Jobs {
 	public static function get_job_by_token( $job_token ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_name} WHERE job_token = %s", $job_token ) );
+	}
+
+	/**
+	 * Get active jobs for a user so the chat UI can reattach after navigation.
+	 *
+	 * @param int    $user_id       User ID.
+	 * @param string $history_scope Optional chat scope to filter by.
+	 * @return array
+	 */
+	public static function get_active_jobs_for_user( int $user_id, string $history_scope = '' ): array {
+		global $wpdb;
+
+		$table_name = self::get_table_name_sql();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
+		$rows       = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT job_token, job_type, status, input_data, created_at
+				 FROM {$table_name}
+				 WHERE user_id = %d AND status IN (%s, %s)
+				 ORDER BY created_at ASC",
+				$user_id,
+				self::STATUS_PENDING,
+				self::STATUS_PROCESSING
+			),
+			ARRAY_A
+		);
+
+		$normalized_scope = '';
+		if ( '' !== $history_scope && class_exists( 'ABW_Chat_Interface' ) ) {
+			$normalized_scope = ABW_Chat_Interface::normalize_history_scope( $history_scope );
+		}
+
+		$jobs = [];
+		foreach ( $rows as $row ) {
+			$input_data = json_decode( $row['input_data'] ?? '', true );
+			$job_scope  = '';
+			if ( is_array( $input_data ) && ! empty( $input_data['history_scope'] ) && class_exists( 'ABW_Chat_Interface' ) ) {
+				$job_scope = ABW_Chat_Interface::normalize_history_scope( (string) $input_data['history_scope'] );
+			}
+
+			if ( '' !== $normalized_scope && '' !== $job_scope && $job_scope !== $normalized_scope ) {
+				continue;
+			}
+
+			$jobs[] = [
+				'job_token'  => (string) ( $row['job_token'] ?? '' ),
+				'job_type'   => (string) ( $row['job_type'] ?? '' ),
+				'status'     => (string) ( $row['status'] ?? self::STATUS_PENDING ),
+				'created_at' => (string) ( $row['created_at'] ?? '' ),
+			];
+		}
+
+		return $jobs;
 	}
 
 	/**
@@ -324,14 +384,14 @@ class ABW_Background_Jobs {
 	public static function lock_job( $job_id ) {
 		global $wpdb;
 
-		$table_name   = self::get_table_name();
+		$table_name   = self::get_table_name_sql();
 		$safe_timeout = self::get_safe_timeout();
 		$now          = current_time( 'mysql' );
 		$timeout_at   = gmdate( 'Y-m-d H:i:s', time() + $safe_timeout );
 
 		// Atomic lock + increment attempts in a single query.
 		// Uses WHERE status = 'pending' to prevent race conditions.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$locked = $wpdb->query( $wpdb->prepare(
 			"UPDATE {$table_name} SET status = %s, started_at = %s, timeout_at = %s, attempts = attempts + 1 WHERE id = %d AND status = %s",
 			self::STATUS_PROCESSING,
@@ -353,7 +413,7 @@ class ABW_Background_Jobs {
 	public static function complete_job( $job_id, $result_data ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$wpdb->update(
 			$table_name,
@@ -377,7 +437,7 @@ class ABW_Background_Jobs {
 	public static function fail_job( $job_id, $error_message ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$wpdb->update(
 			$table_name,
@@ -401,7 +461,7 @@ class ABW_Background_Jobs {
 	public static function cancel_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		$updated = $wpdb->update(
 			$table_name,
@@ -429,7 +489,7 @@ class ABW_Background_Jobs {
 	public static function retry_job( $job_id ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Only retry if the job is failed and hasn't exceeded max attempts.
 		$job = self::get_job( $job_id );
@@ -523,10 +583,13 @@ class ABW_Background_Jobs {
 		$arguments  = $input_data['arguments'] ?? [];
 		$messages   = $input_data['messages'] ?? [];
 		$tools_list = $input_data['tools'] ?? [];
+		$tool_plan  = is_array( $input_data['tool_plan'] ?? null ) ? $input_data['tool_plan'] : [];
 
 		try {
-			// If this is an AI chat operation, we need to replay the chat + tool execution.
-			if ( ! empty( $messages ) ) {
+			if ( ! empty( $tool_plan ) ) {
+				$result = self::process_tool_plan_job( $job_id, $tool_plan, $messages, $tools_list, $input_data );
+			} elseif ( ! empty( $messages ) ) {
+				// Legacy fallback for jobs created before tool plans were persisted.
 				$result = self::process_chat_job( $job_id, $messages, $tools_list, $input_data );
 			} else {
 				// Direct tool execution.
@@ -570,8 +633,9 @@ class ABW_Background_Jobs {
 	 * @return array|WP_Error Result array or error.
 	 */
 	private static function process_chat_job( $job_id, $messages, $tools, $input ) {
-		$provider = $input['provider'] ?? ABW_AI_Router::get_provider();
-		$user_id  = get_current_user_id();
+		$provider      = $input['provider'] ?? ABW_AI_Router::get_provider();
+		$user_id       = get_current_user_id();
+		$history_scope = isset( $input['history_scope'] ) ? ABW_Chat_Interface::normalize_history_scope( (string) $input['history_scope'] ) : ABW_Chat_Interface::DEFAULT_HISTORY_SCOPE;
 
 		$result = ABW_Chat_Interface::run_agentic_until_complete(
 			$messages,
@@ -597,10 +661,120 @@ class ABW_Background_Jobs {
 			);
 		}
 
+		ABW_Chat_Interface::save_background_response_to_history( $user_id, $history_scope, $final_response );
+
 		return [
 			'response'      => $final_response,
 			'tool_results'  => $result['all_tool_results'] ?? [],
 			'steps'         => $result['steps'] ?? [],
+		];
+	}
+
+	/**
+	 * Process a chat background job from an exact persisted tool plan.
+	 *
+	 * @param int   $job_id    Job ID.
+	 * @param array $tool_plan Tool calls captured from the original AI response.
+	 * @param array $messages  Original chat messages.
+	 * @param array $tools     Available tools.
+	 * @param array $input     Job payload.
+	 * @return array|WP_Error
+	 */
+	private static function process_tool_plan_job( $job_id, array $tool_plan, array $messages, array $tools, array $input ) {
+		unset( $job_id );
+
+		$provider       = $input['provider'] ?? ABW_AI_Router::get_provider();
+		$user_id        = get_current_user_id();
+		$history_scope  = isset( $input['history_scope'] ) ? (string) $input['history_scope'] : ABW_Chat_Interface::DEFAULT_HISTORY_SCOPE;
+		$assistant_reply = [
+			'content'    => (string) ( $input['assistant_content'] ?? '' ),
+			'tool_calls' => $tool_plan,
+		];
+
+		$exact_result = ABW_Chat_Interface::execute_tool_plan( $assistant_reply, $tool_plan, $user_id );
+		if ( is_wp_error( $exact_result ) ) {
+			return $exact_result;
+		}
+
+		if ( ! empty( $exact_result['confirmation'] ) ) {
+			return new WP_Error(
+				'background_confirmation_required',
+				__( 'This background task now requires manual approval before it can continue.', 'abw-ai' )
+			);
+		}
+
+		$all_tool_results = $exact_result['all_tool_results'] ?? [];
+		$steps            = $exact_result['steps'] ?? [];
+		$terminal_reply   = ABW_Chat_Interface::build_terminal_response_from_tool_results( $all_tool_results );
+
+		if ( '' !== trim( $terminal_reply ) ) {
+			ABW_Chat_Interface::save_background_response_to_history( $user_id, $history_scope, $terminal_reply );
+			return [
+				'response'     => $terminal_reply,
+				'tool_results' => $all_tool_results,
+				'steps'        => $steps,
+			];
+		}
+
+		if ( empty( $messages ) || empty( $tools ) ) {
+			$fallback_reply = ABW_Chat_Interface::build_fallback_response_from_results( $all_tool_results );
+			$final_reply    = '' !== trim( $fallback_reply ) ? $fallback_reply : __( 'Task completed.', 'abw-ai' );
+			ABW_Chat_Interface::save_background_response_to_history( $user_id, $history_scope, $final_reply );
+			return [
+				'response'     => $final_reply,
+				'tool_results' => $all_tool_results,
+				'steps'        => $steps,
+			];
+		}
+
+		$tool_messages      = ABW_AI_Router::build_tool_result_messages( $assistant_reply, $exact_result['tool_results_for_ai'] ?? [] );
+		$continuation_input = array_merge(
+			$messages,
+			$tool_messages,
+			[
+				[
+					'role'    => 'user',
+					'content' => 'Tool results received. Continue from this exact state. Reuse the returned IDs and arguments where applicable. If the task is complete, give the final answer.',
+				],
+			]
+		);
+
+		$result = ABW_Chat_Interface::run_agentic_until_complete(
+			$continuation_input,
+			$tools,
+			$provider,
+			$user_id,
+			false
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		if ( ! empty( $result['confirmation'] ) ) {
+			return new WP_Error(
+				'background_confirmation_required',
+				__( 'This background task now requires manual approval before it can continue.', 'abw-ai' )
+			);
+		}
+
+		$all_tool_results = array_merge( $all_tool_results, $result['all_tool_results'] ?? [] );
+		$steps            = array_merge( $steps, $result['steps'] ?? [] );
+		$final_response   = $result['response']['content'] ?? '';
+
+		if ( '' === trim( $final_response ) ) {
+			$final_response = ABW_Chat_Interface::build_fallback_response_from_results( $all_tool_results );
+		}
+		if ( '' === trim( $final_response ) ) {
+			$final_response = __( 'Task completed.', 'abw-ai' );
+		}
+
+		ABW_Chat_Interface::save_background_response_to_history( $user_id, $history_scope, $final_response );
+
+		return [
+			'response'     => $final_response,
+			'tool_results' => $all_tool_results,
+			'steps'        => $steps,
 		];
 	}
 
@@ -612,10 +786,10 @@ class ABW_Background_Jobs {
 	public static function try_process_next() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Find the oldest pending job.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$job = $wpdb->get_row( $wpdb->prepare(
 			"SELECT id FROM {$table_name} WHERE status = %s ORDER BY created_at ASC LIMIT 1",
 			self::STATUS_PENDING
@@ -723,11 +897,11 @@ class ABW_Background_Jobs {
 	public static function detect_stuck_jobs() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 		$now        = current_time( 'mysql' );
 
 		// Find stuck jobs (processing but past their timeout).
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$stuck_jobs = $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, attempts, max_attempts FROM {$table_name} WHERE status = %s AND timeout_at IS NOT NULL AND timeout_at < %s",
 			self::STATUS_PROCESSING,
@@ -765,10 +939,10 @@ class ABW_Background_Jobs {
 	public static function cleanup_old_jobs() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
 		// Delete completed jobs older than 7 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 7 DAY)",
 			self::STATUS_COMPLETED,
@@ -776,7 +950,7 @@ class ABW_Background_Jobs {
 		) );
 
 		// Delete failed jobs older than 30 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 30 DAY)",
 			self::STATUS_FAILED,
@@ -784,7 +958,7 @@ class ABW_Background_Jobs {
 		) );
 
 		// Delete cancelled jobs older than 7 days.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$table_name} WHERE status = %s AND completed_at < DATE_SUB(%s, INTERVAL 7 DAY)",
 			self::STATUS_CANCELLED,
@@ -873,7 +1047,7 @@ class ABW_Background_Jobs {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
 		}
 
-		$job_id = isset( $_POST['job_id'] ) ? (int) $_POST['job_id'] : 0;
+		$job_id = isset( $_POST['job_id'] ) ? absint( wp_unslash( $_POST['job_id'] ) ) : 0;
 
 		if ( ! $job_id ) {
 			wp_send_json_error( [ 'message' => __( 'Job ID is required.', 'abw-ai' ) ] );
@@ -900,7 +1074,7 @@ class ABW_Background_Jobs {
 			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'abw-ai' ) ], 403 );
 		}
 
-		$job_id = isset( $_POST['job_id'] ) ? (int) $_POST['job_id'] : 0;
+		$job_id = isset( $_POST['job_id'] ) ? absint( wp_unslash( $_POST['job_id'] ) ) : 0;
 
 		if ( ! $job_id ) {
 			wp_send_json_error( [ 'message' => __( 'Job ID is required.', 'abw-ai' ) ] );
@@ -927,17 +1101,17 @@ class ABW_Background_Jobs {
 
 		global $wpdb;
 
-		$table_name = self::get_table_name();
-		$page       = isset( $_POST['page'] ) ? max( 1, (int) $_POST['page'] ) : 1;
+		$table_name = self::get_table_name_sql();
+		$page       = isset( $_POST['page'] ) ? max( 1, (int) wp_unslash( $_POST['page'] ) ) : 1;
 		$per_page   = 20;
 		$offset     = ( $page - 1 ) * $per_page;
 
 		// Get total count.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table_name}" );
 
 		// Get jobs.
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$jobs = $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, user_id, job_type, status, error_message, attempts, max_attempts, created_at, started_at, completed_at FROM {$table_name} ORDER BY created_at DESC LIMIT %d OFFSET %d",
 			$per_page,
@@ -983,9 +1157,9 @@ class ABW_Background_Jobs {
 	public static function get_job_counts() {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.NoCaching,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$results = $wpdb->get_results( "SELECT status, COUNT(*) as count FROM {$table_name} GROUP BY status" );
 
 		$counts = [
@@ -1014,9 +1188,9 @@ class ABW_Background_Jobs {
 	public static function get_recent_jobs( $limit = 50 ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
+		$table_name = self::get_table_name_sql();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter
 		return $wpdb->get_results( $wpdb->prepare(
 			"SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d",
 			$limit

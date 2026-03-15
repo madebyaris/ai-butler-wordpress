@@ -1,14 +1,14 @@
 === ABW-AI - Advanced Butler WordPress AI ===
 Contributors: madebyaris
-Tags: ai, mcp, elementor, chat, automation
+Tags: ai, mcp, chat, automation, gutenberg
 Requires at least: 6.9
 Tested up to: 6.9
 Stable tag: 1.0.0
 Requires PHP: 7.4
-License: MIT
-License URI: https://opensource.org/licenses/MIT
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Advanced AI assistant for WordPress with MCP support, Elementor integration, and conversational chat interface.
+Advanced AI assistant for WordPress with MCP support, Gutenberg-aware editing, and a conversational admin chat interface.
 
 == Description ==
 
@@ -34,9 +34,9 @@ ABW-AI (Advanced Butler WordPress AI) is a comprehensive AI assistant that integ
 * Content translation
 
 **AI Design Features**
-* Generate Elementor layouts
 * CSS generation from descriptions
 * Color scheme suggestions
+* Block editor-aware page assistance
 
 **WordPress Management**
 * Posts/Pages CRUD
@@ -51,7 +51,7 @@ ABW-AI (Advanced Butler WordPress AI) is a comprehensive AI assistant that integ
 * WordPress 6.9+
 * PHP 7.4+
 * OpenAI or Anthropic API key (for chat features)
-* Elementor (optional, for design features)
+* Optional WooCommerce for product and order tools
 
 == Installation ==
 
@@ -59,6 +59,28 @@ ABW-AI (Advanced Butler WordPress AI) is a comprehensive AI assistant that integ
 2. Activate the plugin through the 'Plugins' menu
 3. Go to ABW-AI > Settings to configure your AI provider API key
 4. Start using the chat widget or connect via MCP
+
+= External services =
+
+ABW-AI connects to third-party AI services only when an administrator configures a provider and intentionally uses AI-powered features such as chat, rewriting, summarization, translation, SEO assistance, or connection testing.
+
+OpenAI:
+* Service: `https://api.openai.com/`
+* Data sent: user prompts, selected editor context, requested tool arguments, and AI responses
+* Purpose: generate or transform content and power AI chat features
+* Privacy policy: [https://openai.com/policies/privacy-policy](https://openai.com/policies/privacy-policy)
+
+Anthropic:
+* Service: `https://api.anthropic.com/`
+* Data sent: user prompts, selected editor context, requested tool arguments, and AI responses
+* Purpose: generate or transform content and power AI chat features
+* Privacy policy: [https://www.anthropic.com/legal/privacy](https://www.anthropic.com/legal/privacy)
+
+Custom/OpenAI-compatible provider:
+* Service: administrator-defined endpoint
+* Data sent: user prompts, selected editor context, requested tool arguments, and AI responses
+* Purpose: generate or transform content and power AI chat features
+* Privacy policy: depends on the provider selected by the site administrator
 
 = MCP Configuration =
 
@@ -85,9 +107,9 @@ For Cursor or other MCP clients, add to your configuration:
 
 The MCP integration works without an API key for external clients like Cursor. However, the built-in chat widget requires an OpenAI or Anthropic API key.
 
-= Is this compatible with Elementor? =
+= Does this work with the block editor? =
 
-Yes! ABW-AI has deep Elementor integration for managing pages, templates, and generating layouts.
+Yes. ABW-AI integrates with the WordPress Block Editor (Gutenberg) and can read editor context, suggest changes, and apply block-aware content actions from the sidebar.
 
 = How is this different from Angie? =
 
@@ -100,7 +122,7 @@ ABW-AI is an open-source alternative that integrates with the WordPress MCP ecos
 * WordPress Abilities API integration
 * Multi-provider AI chat (OpenAI, Anthropic)
 * 50+ MCP tools for WordPress management
-* Elementor design capabilities
+* Gutenberg-aware editor workflow
 * AI writing and SEO tools
 
 == Upgrade Notice ==

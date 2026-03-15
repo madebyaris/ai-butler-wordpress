@@ -155,11 +155,6 @@ body.block-editor-page.abw-sidebar-transitioning .interface-interface-skeleton {
 	transition: var(--abw-sidebar-transition) !important;
 }
 
-body.abw-sidebar-active iframe.elementor-app-iframe {
-	width: calc(100% - var(--abw-sidebar-width, 370px)) !important;
-	margin-inline-end: var(--abw-sidebar-width, 370px);
-}
-
 /* Admin Bar Toggle Item */
 #wp-admin-bar-abw-sidebar-toggle .ab-icon {
 	font-size: 18px;
