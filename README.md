@@ -6,6 +6,30 @@ An AI-powered assistant for WordPress that lives inside your admin dashboard. It
 
 ABW-AI is enhanced for **MiniMax** models, taking advantage of their 1M token context window, fast inference speeds, and cost-effective pricing -- making it practical to send full page layouts and long editor contexts to the AI without worrying about token limits or response latency.
 
+## Visual Preview
+
+Repository preview assets for the WordPress.org listing are stored in `wporg-assets/`.
+
+![ABW-AI Banner](wporg-assets/banner-772x250.png)
+
+### Icon
+
+![ABW-AI Icon](wporg-assets/icon-256x256.png)
+
+### Screenshots
+
+#### Settings And Live Chat
+
+![ABW-AI Screenshot 1](wporg-assets/screenshot-1.png)
+
+#### Background Jobs Dashboard
+
+![ABW-AI Screenshot 2](wporg-assets/screenshot-2.png)
+
+#### Debug Log And Chat History
+
+![ABW-AI Screenshot 3](wporg-assets/screenshot-3.png)
+
 ---
 
 > **Sponsored by [MiniMax](https://www.minimax.io)** -- high-performance AI models with 1M token context, agentic tool calling, and OpenAI-compatible APIs. Get your API key at [platform.minimax.io](https://platform.minimax.io).
