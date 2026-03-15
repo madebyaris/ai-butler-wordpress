@@ -2,7 +2,7 @@
 /**
  * Admin Interface
  *
- * @package ABW_AI_Elementor
+ * @package ABW_AI
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -148,24 +148,26 @@ class ABW_Admin {
 	public static function render_settings_page() {
 		// Handle form submission
 		if ( isset( $_POST['abw_save_settings'] ) && check_admin_referer( 'abw_settings', 'abw_settings_nonce' ) ) {
+			$post_data = wp_unslash( $_POST );
+
 			// General settings
-			update_option( 'abw_rate_limit', isset( $_POST['abw_rate_limit'] ) ? (int) $_POST['abw_rate_limit'] : 100 );
-			update_option( 'abw_cors_origins', isset( $_POST['abw_cors_origins'] ) ? sanitize_textarea_field( $_POST['abw_cors_origins'] ) : '' );
+			update_option( 'abw_rate_limit', isset( $post_data['abw_rate_limit'] ) ? (int) $post_data['abw_rate_limit'] : 100 );
+			update_option( 'abw_cors_origins', isset( $post_data['abw_cors_origins'] ) ? sanitize_textarea_field( $post_data['abw_cors_origins'] ) : '' );
 			
 			// AI settings
-			update_option( 'abw_ai_provider', isset( $_POST['abw_ai_provider'] ) ? sanitize_text_field( $_POST['abw_ai_provider'] ) : 'openai' );
-			update_option( 'abw_chat_enabled', isset( $_POST['abw_chat_enabled'] ) ? true : false );
+			update_option( 'abw_ai_provider', isset( $post_data['abw_ai_provider'] ) ? sanitize_text_field( $post_data['abw_ai_provider'] ) : 'openai' );
+			update_option( 'abw_chat_enabled', isset( $post_data['abw_chat_enabled'] ) );
 			
 			// API Keys (encrypt if ABW_AI_Router is available)
-			if ( ! empty( $_POST['abw_openai_api_key'] ) ) {
-				$key = sanitize_text_field( $_POST['abw_openai_api_key'] );
+			if ( ! empty( $post_data['abw_openai_api_key'] ) ) {
+				$key = sanitize_text_field( $post_data['abw_openai_api_key'] );
 				if ( class_exists( 'ABW_AI_Router' ) && method_exists( 'ABW_AI_Router', 'encrypt' ) ) {
 					$key = ABW_AI_Router::encrypt( $key );
 				}
 				update_option( 'abw_openai_api_key', $key );
 			}
-			if ( ! empty( $_POST['abw_anthropic_api_key'] ) ) {
-				$key = sanitize_text_field( $_POST['abw_anthropic_api_key'] );
+			if ( ! empty( $post_data['abw_anthropic_api_key'] ) ) {
+				$key = sanitize_text_field( $post_data['abw_anthropic_api_key'] );
 				if ( class_exists( 'ABW_AI_Router' ) && method_exists( 'ABW_AI_Router', 'encrypt' ) ) {
 					$key = ABW_AI_Router::encrypt( $key );
 				}
@@ -173,10 +175,10 @@ class ABW_Admin {
 			}
 			
 			// Custom provider
-			update_option( 'abw_custom_endpoint', isset( $_POST['abw_custom_endpoint'] ) ? esc_url_raw( $_POST['abw_custom_endpoint'] ) : '' );
-			update_option( 'abw_custom_model', isset( $_POST['abw_custom_model'] ) ? sanitize_text_field( $_POST['abw_custom_model'] ) : '' );
-			if ( ! empty( $_POST['abw_custom_api_key'] ) ) {
-				$key = sanitize_text_field( $_POST['abw_custom_api_key'] );
+			update_option( 'abw_custom_endpoint', isset( $post_data['abw_custom_endpoint'] ) ? esc_url_raw( $post_data['abw_custom_endpoint'] ) : '' );
+			update_option( 'abw_custom_model', isset( $post_data['abw_custom_model'] ) ? sanitize_text_field( $post_data['abw_custom_model'] ) : '' );
+			if ( ! empty( $post_data['abw_custom_api_key'] ) ) {
+				$key = sanitize_text_field( $post_data['abw_custom_api_key'] );
 				if ( class_exists( 'ABW_AI_Router' ) && method_exists( 'ABW_AI_Router', 'encrypt' ) ) {
 					$key = ABW_AI_Router::encrypt( $key );
 				}
@@ -184,9 +186,9 @@ class ABW_Admin {
 			}
 			
 			// Sidebar settings
-			update_option( 'abw_sidebar_default_state', isset( $_POST['abw_sidebar_default_state'] ) ? sanitize_text_field( $_POST['abw_sidebar_default_state'] ) : 'closed' );
-			update_option( 'abw_sidebar_default_width', isset( $_POST['abw_sidebar_default_width'] ) ? absint( $_POST['abw_sidebar_default_width'] ) : 370 );
-			update_option( 'abw_debug_log', isset( $_POST['abw_debug_log'] ) );
+			update_option( 'abw_sidebar_default_state', isset( $post_data['abw_sidebar_default_state'] ) ? sanitize_text_field( $post_data['abw_sidebar_default_state'] ) : 'closed' );
+			update_option( 'abw_sidebar_default_width', isset( $post_data['abw_sidebar_default_width'] ) ? absint( $post_data['abw_sidebar_default_width'] ) : 370 );
+			update_option( 'abw_debug_log', isset( $post_data['abw_debug_log'] ) );
 
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'abw-ai' ) . '</p></div>';
 		}
@@ -522,26 +524,37 @@ class ABW_Admin {
 
 		// Handle view/download.
 		$view_file = isset( $_GET['view'] ) ? sanitize_file_name( wp_unslash( $_GET['view'] ) ) : '';
+		$nonce_ok  = isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'abw_debug_log_' . $view_file );
 		if ( $view_file && current_user_can( 'manage_options' ) ) {
+			if ( ! $nonce_ok ) {
+				wp_die( esc_html__( 'Invalid debug log link.', 'abw-ai' ) );
+			}
+
 			$content = ABW_Debug_Log::get_log_content( $view_file );
 			if ( is_wp_error( $content ) ) {
 				echo '<div class="wrap"><div class="notice notice-error"><p>' . esc_html( $content->get_error_message() ) . '</p></div></div>';
 				return;
 			}
 			if ( isset( $_GET['download'] ) ) {
-				header( 'Content-Type: application/octet-stream' );
-				header( 'Content-Disposition: attachment; filename="' . esc_attr( $view_file ) . '"' );
+				nocache_headers();
+				header( 'Content-Type: text/plain; charset=utf-8' );
+				header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $view_file ) . '"' );
 				header( 'Content-Length: ' . strlen( $content ) );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				echo $content;
+				echo esc_textarea( $content );
 				exit;
 			}
+
+			$back_url     = admin_url( 'admin.php?page=abw-ai-debug' );
+			$download_url = wp_nonce_url(
+				admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $view_file ) . '&download=1' ),
+				'abw_debug_log_' . $view_file
+			);
 			?>
 			<div class="wrap">
 				<h1><?php esc_html_e( 'Debug Log:', 'abw-ai' ); ?> <?php echo esc_html( $view_file ); ?></h1>
 				<p>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug' ) ); ?>" class="button"><?php esc_html_e( '&larr; Back to Logs', 'abw-ai' ); ?></a>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $view_file ) . '&download=1' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
+					<a href="<?php echo esc_url( $back_url ); ?>" class="button"><?php esc_html_e( '&larr; Back to Logs', 'abw-ai' ); ?></a>
+					<a href="<?php echo esc_url( $download_url ); ?>" class="button button-primary"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
 				</p>
 				<pre style="background:#1e293b;color:#e2e8f0;padding:16px;overflow:auto;max-height:70vh;font-size:12px;line-height:1.5;"><?php echo esc_html( $content ); ?></pre>
 			</div>
@@ -586,14 +599,24 @@ class ABW_Admin {
 					</thead>
 					<tbody>
 						<?php foreach ( $files as $f ) : ?>
+							<?php
+							$view_url = wp_nonce_url(
+								admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) ),
+								'abw_debug_log_' . $f['name']
+							);
+							$download_url = wp_nonce_url(
+								admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) . '&download=1' ),
+								'abw_debug_log_' . $f['name']
+							);
+							?>
 							<tr>
 								<td><code><?php echo esc_html( $f['name'] ); ?></code></td>
 								<td><?php echo esc_html( $f['size'] ); ?></td>
 								<td><?php echo esc_html( $f['date'] ); ?></td>
 								<td>
-									<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) ) ); ?>"><?php esc_html_e( 'View', 'abw-ai' ); ?></a>
+									<a href="<?php echo esc_url( $view_url ); ?>"><?php esc_html_e( 'View', 'abw-ai' ); ?></a>
 									|
-									<a href="<?php echo esc_url( admin_url( 'admin.php?page=abw-ai-debug&view=' . rawurlencode( $f['name'] ) . '&download=1' ) ); ?>"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
+									<a href="<?php echo esc_url( $download_url ); ?>"><?php esc_html_e( 'Download', 'abw-ai' ); ?></a>
 								</td>
 							</tr>
 						<?php endforeach; ?>

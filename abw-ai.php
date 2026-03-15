@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ABW-AI - Advanced Butler WordPress AI
  * Plugin URI: https://github.com/madebyaris/ai-butler-wordpress
- * Description: Advanced AI assistant for WordPress with MCP support, Elementor integration, and multi-provider AI chat interface
+ * Description: Advanced AI assistant for WordPress with MCP support, Gutenberg integration, and a multi-provider AI chat interface
  * Version: 1.0.0
  * Author: ABW-AI Contributors
  * Author URI: https://github.com/madebyaris/ai-butler-wordpress
@@ -27,7 +27,6 @@ define( 'ABW_INCLUDES', ABW_PATH . 'includes/' );
 // Load core files
 require_once ABW_INCLUDES . 'class-admin.php';
 require_once ABW_INCLUDES . 'class-debug-log.php';
-require_once ABW_INCLUDES . 'class-elementor-rest-api.php';
 require_once ABW_INCLUDES . 'class-abilities-registration.php';
 require_once ABW_INCLUDES . 'class-background-jobs.php';
 require_once ABW_INCLUDES . 'class-ai-router.php';
@@ -45,7 +44,6 @@ add_filter( 'cron_schedules', [ 'ABW_Background_Jobs', 'add_cron_schedules' ] );
  */
 function abw_ai_init() {
 	ABW_Admin::init();
-	ABW_Elementor_REST_API::init();
 	ABW_Abilities_Registration::init();
 	ABW_Background_Jobs::init();
 	ABW_Chat_Interface::init();

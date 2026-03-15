@@ -173,7 +173,7 @@ class ABW_AI_Router
         ]);
 
         if (is_wp_error($response)) {
-            return $response;
+            return self::format_provider_transport_error(self::PROVIDER_OPENAI, $response);
         }
 
         $status_code = wp_remote_retrieve_response_code($response);
@@ -237,7 +237,7 @@ class ABW_AI_Router
         ]);
 
         if (is_wp_error($response)) {
-            return $response;
+            return self::format_provider_transport_error(self::PROVIDER_ANTHROPIC, $response);
         }
 
         $status_code = wp_remote_retrieve_response_code($response);
@@ -304,7 +304,7 @@ class ABW_AI_Router
         ]);
 
         if (is_wp_error($response)) {
-            return $response;
+            return self::format_provider_transport_error(self::PROVIDER_CUSTOM, $response);
         }
 
         $status_code = wp_remote_retrieve_response_code($response);
@@ -313,7 +313,7 @@ class ABW_AI_Router
 
         if ($status_code !== 200) {
             // Try to extract error message from response
-            $error_message = 'Custom API error';
+            $error_message = '';
             $error_details = [];
 
             if (is_array($body)) {
@@ -336,15 +336,9 @@ class ABW_AI_Router
                     }
                     $error_details = $body['base_resp'];
                 }
-            } elseif (! empty($response_body)) {
-                // If not JSON, show raw response (truncated)
-                $error_message = substr($response_body, 0, 200);
             }
 
-            // Special handling for 404 errors - likely wrong endpoint
-            if ($status_code === 404) {
-                $error_message .= '. ' . __('Check that your endpoint URL includes the full path (e.g., /v1/chat/completions).', 'abw-ai');
-            }
+            $user_friendly_error = self::format_custom_provider_error($status_code, $error_message, $response_body);
 
             // Log for debugging (only in debug mode)
             if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -358,7 +352,7 @@ class ABW_AI_Router
 
             return new WP_Error(
                 'custom_error',
-                sprintf(__('Custom API error (HTTP %d): %s', 'abw-ai'), $status_code, $error_message),
+                $user_friendly_error,
                 [
                     'status' => $status_code,
                     'response' => $response_body,
@@ -368,6 +362,92 @@ class ABW_AI_Router
         }
 
         return self::parse_openai_response($body);
+    }
+
+    /**
+     * Turn raw custom-provider failures into user-friendly messages.
+     *
+     * @param int    $status_code   HTTP status from the provider.
+     * @param string $error_message Best parsed provider message, if any.
+     * @param string $response_body Raw provider response body.
+     * @return string
+     */
+    private static function format_custom_provider_error(int $status_code, string $error_message, string $response_body): string
+    {
+        $message = trim(wp_strip_all_tags($error_message));
+        $response_excerpt = trim(wp_strip_all_tags((string) $response_body));
+        $looks_like_json = '' !== $response_excerpt && (
+            '{' === $response_excerpt[0] ||
+            '[' === $response_excerpt[0]
+        );
+
+        if ($status_code === 404) {
+            return __('The custom AI endpoint could not be found. Check that the endpoint URL includes the full API path, such as /v1/chat/completions.', 'abw-ai');
+        }
+
+        if ($status_code >= 500) {
+            if ($message !== '' && ! $looks_like_json) {
+                return sprintf(
+                    __('The custom AI provider returned a server error: %s', 'abw-ai'),
+                    $message
+                );
+            }
+
+            return __('The custom AI provider returned a server error and did not send a usable message. Please try again in a moment. If this keeps happening, check the provider status, model name, and endpoint configuration.', 'abw-ai');
+        }
+
+        if ($message !== '' && ! $looks_like_json) {
+            return sprintf(
+                __('The custom AI provider rejected the request: %s', 'abw-ai'),
+                $message
+            );
+        }
+
+        return sprintf(
+            __('The custom AI provider request failed with HTTP %d. Please review your endpoint, headers, and model settings.', 'abw-ai'),
+            $status_code
+        );
+    }
+
+    /**
+     * Convert low-level transport/network failures into user-friendly provider errors.
+     *
+     * @param string   $provider Provider key.
+     * @param WP_Error $error    Transport error from wp_remote_post().
+     * @return WP_Error
+     */
+    private static function format_provider_transport_error(string $provider, WP_Error $error): WP_Error
+    {
+        $raw_message = trim((string) $error->get_error_message());
+        $provider_label = self::PROVIDER_CUSTOM === $provider
+            ? __('custom AI provider', 'abw-ai')
+            : sprintf(__('%s provider', 'abw-ai'), ucfirst($provider));
+
+        $friendly_message = sprintf(
+            __('Could not reach the %s. Please try again and verify your API settings, endpoint, and network connection.', 'abw-ai'),
+            $provider_label
+        );
+
+        if (
+            false !== stripos($raw_message, 'cURL error 28') ||
+            false !== stripos($raw_message, 'timed out') ||
+            false !== stripos($raw_message, 'timeout')
+        ) {
+            $friendly_message = sprintf(
+                __('The %s took too long to respond. Please try again in a moment. If this keeps happening, check the model, endpoint, and server timeout settings.', 'abw-ai'),
+                $provider_label
+            );
+        }
+
+        return new WP_Error(
+            $error->get_error_code() ?: 'provider_transport_error',
+            $friendly_message,
+            [
+                'provider'    => $provider,
+                'raw_message' => $raw_message,
+                'original'    => $error,
+            ]
+        );
     }
 
     /**
@@ -734,11 +814,6 @@ class ABW_AI_Router
             // Block Themes
             'list_block_patterns' => ['ABW_Abilities_Registration', 'execute_list_block_patterns'],
             'list_template_parts' => ['ABW_Abilities_Registration', 'execute_list_template_parts'],
-            // Elementor
-            'list_elementor_pages' => ['ABW_Abilities_Registration', 'execute_list_elementor_pages'],
-            'get_elementor_page'   => ['ABW_Abilities_Registration', 'execute_get_elementor_page'],
-            'update_elementor_page' => ['ABW_Abilities_Registration', 'execute_update_elementor_page'],
-            'list_elementor_templates' => ['ABW_Abilities_Registration', 'execute_list_elementor_templates'],
             // WooCommerce (conditional)
             'list_products'       => ['ABW_Abilities_Registration', 'execute_list_products'],
             'get_product'         => ['ABW_Abilities_Registration', 'execute_get_product'],
@@ -822,6 +897,8 @@ class ABW_AI_Router
             'get_publishing_stats'   => ['ABW_AI_Tools', 'get_publishing_stats'],
             'get_comment_stats'      => ['ABW_AI_Tools', 'get_comment_stats'],
             'generate_site_report'   => ['ABW_AI_Tools', 'generate_site_report'],
+            'get_daily_brief'        => ['ABW_AI_Tools', 'get_daily_brief'],
+            'get_site_opportunities' => ['ABW_AI_Tools', 'get_site_opportunities'],
         ];
 
         if (! isset($tool_mapping[$tool_name])) {
@@ -962,7 +1039,8 @@ class ABW_AI_Router
             'get_publishing_stats',
             'get_comment_stats',
             'generate_site_report',
-            'update_elementor_page',
+            'get_daily_brief',
+            'get_site_opportunities',
         ];
 
         $read_tools = [
@@ -980,22 +1058,21 @@ class ABW_AI_Router
             'get_site_health',
             'check_plugin_updates',
             'check_theme_updates',
-            'list_elementor_pages',
-            'get_elementor_page',
-            'list_elementor_templates',
+            'get_daily_brief',
+            'get_site_opportunities',
         ];
 
         if (in_array($tool_name, $read_tools, true)) {
             return [
-                'caps'    => 'read',
-                'message' => __('You need basic site access to run this tool.', 'abw-ai'),
+                'caps'    => 'manage_options',
+                'message' => __('You need administrator access to run this tool.', 'abw-ai'),
             ];
         }
 
         if (in_array($tool_name, $edit_posts_tools, true)) {
             return [
-                'caps'    => 'edit_posts',
-                'message' => __('You need permission to edit content before running this tool.', 'abw-ai'),
+                'caps'    => 'manage_options',
+                'message' => __('You need administrator access to run this tool.', 'abw-ai'),
             ];
         }
 
@@ -1547,10 +1624,12 @@ class ABW_AI_Router
                     'type'       => 'object',
                     'required'   => ['id'],
                     'properties' => [
-                        'id'      => ['type' => 'integer', 'description' => 'Post ID'],
-                        'title'   => ['type' => 'string', 'description' => 'New title'],
-                        'content' => ['type' => 'string', 'description' => 'New content'],
-                        'status'  => ['type' => 'string', 'description' => 'New status'],
+                        'id'           => ['type' => 'integer', 'description' => 'Post ID. Use the exact ID returned by previous tools. If no reliable ID is known, pass 0 and provide lookup_title.'],
+                        'title'        => ['type' => 'string', 'description' => 'New title'],
+                        'content'      => ['type' => 'string', 'description' => 'New content'],
+                        'status'       => ['type' => 'string', 'description' => 'New status'],
+                        'lookup_title' => ['type' => 'string', 'description' => 'Optional exact current post title for safe server-side resolution when no reliable ID is known'],
+                        'post_type'    => ['type' => 'string', 'description' => 'Optional post type filter for lookup_title'],
                     ],
                 ],
             ],
@@ -1814,54 +1893,6 @@ class ABW_AI_Router
                 ],
             ],
         ];
-
-        // Add Elementor tools if available
-        if (class_exists('\Elementor\Plugin')) {
-            $tools[] = [
-                'name'        => 'list_elementor_pages',
-                'description' => 'List pages built with Elementor',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'per_page' => ['type' => 'integer', 'description' => 'Number per page'],
-                    ],
-                ],
-            ];
-            $tools[] = [
-                'name'        => 'get_elementor_page',
-                'description' => 'Get Elementor page data',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'required'   => ['id'],
-                    'properties' => [
-                        'id' => ['type' => 'integer', 'description' => 'Page ID'],
-                    ],
-                ],
-            ];
-            $tools[] = [
-                'name'        => 'update_elementor_page',
-                'description' => 'Update an Elementor page layout',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'required'   => ['id'],
-                    'properties' => [
-                        'id'       => ['type' => 'integer', 'description' => 'Page ID'],
-                        'elements' => ['type' => 'array', 'description' => 'Elementor elements data'],
-                        'settings' => ['type' => 'object', 'description' => 'Page settings'],
-                    ],
-                ],
-            ];
-            $tools[] = [
-                'name'        => 'list_elementor_templates',
-                'description' => 'List Elementor templates',
-                'parameters'  => [
-                    'type'       => 'object',
-                    'properties' => [
-                        'type' => ['type' => 'string', 'description' => 'Template type filter'],
-                    ],
-                ],
-            ];
-        }
 
         // Add WooCommerce tools if available
         if (class_exists('WooCommerce')) {
@@ -2164,6 +2195,12 @@ class ABW_AI_Router
                 'instructions' => 'Use the full toolset and pick the best tools for the user request.',
                 'tools'        => [],
             ],
+            'copilot' => [
+                'label'        => __('Copilot', 'abw-ai'),
+                'description'  => __('Act like a site-wide advisor that can brief, diagnose, and recommend next actions across the whole WordPress admin.', 'abw-ai'),
+                'instructions' => 'Start with broad situational awareness. Prefer daily briefs, opportunity scans, and site-wide reports before drilling into specific actions.',
+                'tools'        => [ 'get_daily_brief', 'get_site_opportunities', 'generate_site_report', 'get_post_stats', 'get_popular_content', 'get_recent_activity', 'get_content_calendar', 'get_publishing_stats', 'get_comment_stats', 'get_site_health', 'get_performance_report', 'get_security_report', 'check_plugin_updates', 'check_theme_updates', 'list_workflows', 'run_workflow', 'search_site', 'list_posts', 'get_post' ],
+            ],
             'siteops' => [
                 'label'        => __('SiteOps', 'abw-ai'),
                 'description'  => __('Focus on plugins, themes, options, updates, and performance operations.', 'abw-ai'),
@@ -2178,9 +2215,9 @@ class ABW_AI_Router
             ],
             'editor' => [
                 'label'        => __('Editor/Page', 'abw-ai'),
-                'description'  => __('Focus on Gutenberg and Elementor page-building workflows.', 'abw-ai'),
+                'description'  => __('Focus on Gutenberg page-building workflows.', 'abw-ai'),
                 'instructions' => 'Prioritize block editor and page-building tasks. Use editor-specific tools before general post tools when available.',
-                'tools'        => [ 'list_posts', 'get_post', 'update_post', 'list_media', 'upload_media', 'update_media', 'insert_editor_blocks', 'replace_editor_content', 'update_editor_block', 'remove_editor_blocks', 'save_current_post', 'update_post_details', 'list_elementor_pages', 'get_elementor_page', 'update_elementor_page', 'list_elementor_templates', 'generate_post_content', 'improve_content', 'generate_css', 'suggest_color_scheme', 'generate_outline', 'expand_from_outline', 'generate_table_of_contents' ],
+                'tools'        => [ 'list_posts', 'get_post', 'update_post', 'list_media', 'upload_media', 'update_media', 'insert_editor_blocks', 'replace_editor_content', 'update_editor_block', 'remove_editor_blocks', 'save_current_post', 'update_post_details', 'generate_post_content', 'improve_content', 'generate_css', 'suggest_color_scheme', 'generate_outline', 'expand_from_outline', 'generate_table_of_contents' ],
             ],
             'workflow' => [
                 'label'        => __('Workflow', 'abw-ai'),
@@ -2258,8 +2295,6 @@ class ABW_AI_Router
         $agent_mode = self::normalize_agent_mode($agent_mode);
         $agent_package = self::get_agent_packages()[$agent_mode];
 
-        $has_elementor = class_exists('\Elementor\Plugin') ? 'Yes' : 'No';
-
         $prompt = <<<PROMPT
 You are ABW-AI, an Advanced Butler for WordPress. You are a helpful AI assistant that helps users manage their WordPress website.
 
@@ -2268,7 +2303,6 @@ Current WordPress Site:
 - URL: {$site_url}
 - WordPress Version: {$wp_version}
 - Active Theme: {$theme_name}
-- Elementor Active: {$has_elementor}
 
 Active Agent Package:
 - Mode: {$agent_package['label']}
@@ -2289,7 +2323,6 @@ Your capabilities:
 - BULK OPERATIONS: Bulk update/delete posts, bulk moderate comments, find and replace content
 - SITE HEALTH: Get site health status, check for plugin/theme updates
 - BLOCK THEMES: List block patterns and template parts (for block themes)
-- ELEMENTOR: List and update Elementor pages and templates (if Elementor is active)
 - WOOCOMMERCE: List/update products and orders, sales reports, customer stats, coupons, product performance analysis (if WooCommerce is active)
 - AI CONTENT: Generate posts, product descriptions, outlines, excerpts, TOC, rewrite for tone, expand outlines into full content
 - BRAND VOICE: Train brand voice from existing posts, apply consistent writing style
@@ -2300,6 +2333,7 @@ Your capabilities:
 - WORKFLOWS: Create automated AI workflows with scheduled or event-based triggers, list/toggle/run workflows
 - TRANSLATION: Detect and translate posts, bulk translate, WPML/Polylang integration
 - ANALYTICS: Content calendar, publishing stats, comment stats, comprehensive site report generation
+- COPILOT BRIEFS: Generate daily briefs and site-wide opportunity scans grounded in live site data
 
 IMPORTANT - User Creation:
 - You CAN create users using the create_user tool
@@ -2326,9 +2360,13 @@ ReACT loop for multi-step tasks:
 
 Tool-calling discipline:
 - For "find then modify/delete" requests, gather IDs first, then call the action tool in the same workflow.
+- Never invent IDs. Reuse IDs exactly as returned by tool results.
+- If no reliable post ID is known for `update_post`, first call `list_posts`/`get_post`, or use `lookup_title` for exact server-side title resolution.
 - For bulk actions, handle pagination when needed so "all" really means all matching items.
 - Prefer bulk tools for multi-item actions (`bulk_delete_posts`, `bulk_update_posts`, `bulk_moderate_comments`) when available.
 - When creating users, always use the `create_user` tool. It is available and functional.
+- For site-wide advice such as "what should I work on?" or "give me a brief", prefer `get_daily_brief` or `get_site_opportunities` before free-form analysis.
+- Apply durable user preferences and goals from persistent memory when they are relevant.
 
 High-priority runbook:
 - Request: "delete/remove/empty all posts from trash"

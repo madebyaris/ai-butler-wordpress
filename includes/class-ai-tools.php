@@ -312,63 +312,6 @@ class ABW_AI_Tools
     }
 
     /**
-     * Generate Elementor layout from description
-     *
-     * @param array $input Input parameters
-     * @return array|WP_Error
-     */
-    public static function generate_elementor_layout(array $input)
-    {
-        $description = $input['description'] ?? '';
-        $page_type = $input['page_type'] ?? 'landing';
-        $style = $input['style'] ?? 'modern';
-
-        if (empty($description)) {
-            return new WP_Error('missing_description', __('Please describe the layout you want.', 'abw-ai'));
-        }
-
-        if (! class_exists('\Elementor\Plugin')) {
-            return new WP_Error('elementor_inactive', __('Elementor is not active.', 'abw-ai'));
-        }
-
-        $prompt = sprintf(
-            "Generate an Elementor page layout for: %s\n\nPage type: %s\nStyle: %s\n\nProvide the layout as a JSON array of Elementor elements. Include:\n- Container sections with proper widths\n- Heading, text-editor, image, button widgets\n- Responsive settings for tablet/mobile\n- Use modern flexbox layouts\n\nOutput valid JSON only.",
-            $description,
-            $page_type,
-            $style
-        );
-
-        $messages = [
-            [
-                'role'    => 'system',
-                'content' => 'You are an expert web designer specializing in Elementor. Generate valid Elementor JSON data structures. Each element needs id, elType, widgetType (for widgets), settings, and elements (for containers).',
-            ],
-            [
-                'role'    => 'user',
-                'content' => $prompt,
-            ],
-        ];
-
-        $response = ABW_AI_Router::chat($messages);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        // Parse JSON response
-        $elements = self::maybe_decode_json_payload($response['content']);
-
-        if (! is_array($elements)) {
-            return new WP_Error('invalid_json', __('Failed to generate valid Elementor layout.', 'abw-ai'));
-        }
-
-        return [
-            'elements'    => $elements,
-            'description' => $description,
-        ];
-    }
-
-    /**
      * Generate CSS from description
      *
      * @param array $input Input parameters
@@ -1782,6 +1725,115 @@ class ABW_AI_Tools
     }
 
     /**
+     * Generate a concise daily copilot brief across content, operations, and risk.
+     *
+     * @param array $input Input parameters.
+     * @return array|WP_Error
+     */
+    public static function get_daily_brief(array $input)
+    {
+        $days_ahead = max(1, (int) ($input['days_ahead'] ?? 7));
+        $raw        = [
+            'post_stats'       => ABW_Abilities_Registration::execute_get_post_stats([]),
+            'recent_activity'  => ABW_Abilities_Registration::execute_get_recent_activity(['per_page' => 8]),
+            'popular_content'  => ABW_Abilities_Registration::execute_get_popular_content(['per_page' => 5]),
+            'content_calendar' => self::get_content_calendar(['days_ahead' => $days_ahead]),
+        ];
+
+        if (is_callable(['ABW_Abilities_Registration', 'execute_get_performance_report'])) {
+            $perf = ABW_Abilities_Registration::execute_get_performance_report([]);
+            $raw['performance'] = is_wp_error($perf) ? ['error' => $perf->get_error_message()] : $perf;
+        }
+
+        if (is_callable(['ABW_Security_Tools', 'get_security_report'])) {
+            $security = ABW_Security_Tools::get_security_report([]);
+            $raw['security'] = is_wp_error($security) ? ['error' => $security->get_error_message()] : $security;
+        }
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are a WordPress operations copilot. Produce a concise daily brief with sections for priorities, risks, opportunities, and recommended next steps.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => sprintf(
+                    "Turn this WordPress site snapshot into a practical daily brief. Keep it concise, action-oriented, and grounded in the provided data.\n\n%s",
+                    wp_json_encode($raw, JSON_PRETTY_PRINT)
+                ),
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+        $brief    = is_wp_error($response) ? __('AI summary unavailable.', 'abw-ai') : trim((string) ($response['content'] ?? ''));
+
+        return [
+            'brief'        => $brief,
+            'snapshot'     => $raw,
+            'generated_at' => gmdate('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * Identify high-value site opportunities using existing analytics and health data.
+     *
+     * @param array $input Input parameters.
+     * @return array|WP_Error
+     */
+    public static function get_site_opportunities(array $input)
+    {
+        $focus = $input['focus'] ?? 'all';
+        $raw   = [
+            'post_stats'       => ABW_Abilities_Registration::execute_get_post_stats([]),
+            'recent_activity'  => ABW_Abilities_Registration::execute_get_recent_activity(['per_page' => 10]),
+            'popular_content'  => ABW_Abilities_Registration::execute_get_popular_content(['per_page' => 8]),
+            'publishing_stats' => self::get_publishing_stats(['period' => 'month']),
+            'comment_stats'    => self::get_comment_stats(['period' => 'month']),
+            'content_calendar' => self::get_content_calendar(['days_ahead' => 30]),
+        ];
+
+        if (is_callable(['ABW_Abilities_Registration', 'execute_get_performance_report'])) {
+            $perf = ABW_Abilities_Registration::execute_get_performance_report([]);
+            $raw['performance'] = is_wp_error($perf) ? ['error' => $perf->get_error_message()] : $perf;
+        }
+
+        if (is_callable(['ABW_Security_Tools', 'get_security_report'])) {
+            $security = ABW_Security_Tools::get_security_report([]);
+            $raw['security'] = is_wp_error($security) ? ['error' => $security->get_error_message()] : $security;
+        }
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => 'You are a WordPress growth and operations strategist. Return valid JSON only with an `opportunities` array and optional `summary`. Each opportunity should include title, category, impact, effort, why, and next_step.',
+            ],
+            [
+                'role'    => 'user',
+                'content' => sprintf(
+                    "Analyze this WordPress site snapshot and identify 3-6 high-value opportunities. Focus area: %s. Use the supplied data only.\n\n%s",
+                    $focus,
+                    wp_json_encode($raw, JSON_PRETTY_PRINT)
+                ),
+            ],
+        ];
+
+        $response = ABW_AI_Router::chat($messages);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $decoded = self::maybe_decode_json_payload((string) ($response['content'] ?? ''));
+
+        return [
+            'focus'         => $focus,
+            'summary'       => $decoded['summary'] ?? '',
+            'opportunities' => is_array($decoded['opportunities'] ?? null) ? $decoded['opportunities'] : [],
+            'raw_response'  => (string) ($response['content'] ?? ''),
+            'snapshot'      => $raw,
+        ];
+    }
+
+    /**
      * Analyze content for SEO score
      *
      * @param array $input Input parameters
@@ -2488,6 +2540,26 @@ class ABW_AI_Tools
                     'type'       => 'object',
                     'properties' => [
                         'sections' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Sections to include: content, seo, performance, security. Defaults to all.'],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'get_daily_brief',
+                'description' => 'Generate a concise daily WordPress copilot brief with priorities, risks, and next steps',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'days_ahead' => ['type' => 'integer', 'description' => 'How many days ahead to inspect the content calendar', 'default' => 7],
+                    ],
+                ],
+            ],
+            [
+                'name'        => 'get_site_opportunities',
+                'description' => 'Identify the highest-value site opportunities using current analytics, performance, and security data',
+                'parameters'  => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'focus' => ['type' => 'string', 'description' => 'Optional focus area such as content, seo, performance, security, engagement, or all', 'default' => 'all'],
                     ],
                 ],
             ],

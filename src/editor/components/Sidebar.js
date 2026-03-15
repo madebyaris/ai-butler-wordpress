@@ -5,7 +5,6 @@
  * Integrates with the ABW-AI backend and manages chat state, block context,
  * and block action execution.
  *
- * @package ABW_AI
  */
 
 import { useState, useCallback, useEffect, useRef } from '@wordpress/element';
@@ -30,12 +29,23 @@ export function Sidebar() {
 	const [ showFeedback, setShowFeedback ] = useState( false );
 	const [ agentSteps, setAgentSteps ] = useState( [] );
 	const [ pendingConfirmation, setPendingConfirmation ] = useState( null );
-	const [ agentMode, setAgentMode ] = useState( window.abwEditorChat?.defaultAgentMode || 'general' );
+	const [ agentMode, setAgentMode ] = useState(
+		window.abwEditorChat?.defaultAgentMode || 'general'
+	);
 
-	const pollRef = useRef( { interval: null, timeout: null, inFlight: false, completed: false } );
+	const pollRef = useRef( {
+		interval: null,
+		timeout: null,
+		inFlight: false,
+		completed: false,
+		sessionId: null,
+	} );
+	const jobPollRef = useRef( {} );
 	const { editorContext, isReady } = useEditorContext();
-	const { executeActions, isExecuting, actionStatus, lastResults } = useBlockActions();
+	const { executeActions, isExecuting, actionStatus, lastResults } =
+		useBlockActions();
 
+	/* eslint-disable react-hooks/exhaustive-deps */
 	// Load chat history on mount.
 	useEffect( () => {
 		loadHistory();
@@ -81,16 +91,26 @@ export function Sidebar() {
 				history_scope: getHistoryScope(),
 			},
 			success( response ) {
-				if ( response.success && response.data.history && response.data.history.length > 0 ) {
-					setMessages( response.data.history.map( ( msg ) => ( {
-						role: msg.role,
-						content: msg.content,
-					} ) ) );
+				if (
+					response.success &&
+					response.data.history &&
+					response.data.history.length > 0
+				) {
+					setMessages(
+						response.data.history.map( ( msg ) => ( {
+							role: msg.role,
+							content: msg.content,
+						} ) )
+					);
 				}
-				setPendingConfirmation( response.data?.confirmation || null );
+				setPendingConfirmation(
+					normalizeConfirmation( response.data?.confirmation )
+				);
+				resumeActiveWork( response.data );
 			},
 		} );
 	}, [] );
+	/* eslint-enable react-hooks/exhaustive-deps */
 
 	/**
 	 * Stop agentic polling.
@@ -104,243 +124,470 @@ export function Sidebar() {
 			clearTimeout( pollRef.current.timeout );
 			pollRef.current.timeout = null;
 		}
+		pollRef.current.sessionId = null;
 	}, [] );
+
+	/**
+	 * Stop all background job polling intervals.
+	 */
+	const stopAllJobPolling = useCallback( () => {
+		Object.values( jobPollRef.current ).forEach( ( interval ) => {
+			clearInterval( interval );
+		} );
+		jobPollRef.current = {};
+	}, [] );
+
+	useEffect( () => () => stopAllJobPolling(), [ stopAllJobPolling ] );
 
 	/**
 	 * Start agentic polling for session updates.
 	 *
 	 * @param {string} sessionId Session ID from backend.
 	 */
-	const startAgentPolling = useCallback( ( sessionId ) => {
-		stopAgentPolling();
-		pollRef.current.completed = false;
-		pollRef.current.timeout = setTimeout( () => {
+	const startAgentPolling = useCallback(
+		( sessionId ) => {
+			if ( ! sessionId ) {
+				return;
+			}
+			if (
+				pollRef.current.sessionId === sessionId &&
+				pollRef.current.interval
+			) {
+				return;
+			}
 			stopAgentPolling();
-			setIsLoading( false );
-			setAgentSteps( [] );
-			setMessages( ( prev ) => [
-				...prev,
-				{ role: 'assistant', content: 'Request timed out. Please try again.' },
-			] );
-		}, AGENT_POLL_MAX_MS );
-
-		const poll = async () => {
-			if ( pollRef.current.inFlight ) return;
-			pollRef.current.inFlight = true;
-
-			try {
-				const res = await sendAjax( {
-					action: 'abw_agent_poll',
-					nonce: window.abwEditorChat.nonce,
-					session_id: sessionId,
-				} );
-
-				pollRef.current.inFlight = false;
-
-				if ( ! res.success ) {
-					stopAgentPolling();
-					setIsLoading( false );
-					setAgentSteps( [] );
-					setPendingConfirmation( res.data?.confirmation || null );
-					setMessages( ( prev ) => [
-						...prev,
-						{ role: 'assistant', content: res.data?.message || 'An error occurred.' },
-					] );
-					return;
-				}
-
-				setAgentSteps( res.data.steps || [] );
-
-				if ( res.data.status === 'done' ) {
-					if ( pollRef.current.completed ) return;
-					pollRef.current.completed = true;
-					stopAgentPolling();
-					setIsLoading( false );
-					setAgentSteps( [] );
-
-					if ( res.data.block_actions && res.data.block_actions.length > 0 ) {
-						await executeActions( res.data.block_actions );
-					}
-
-					let content = res.data.response || '';
-					if ( ! content || ! String( content ).trim() ) {
-						content = 'Task completed.';
-					}
-					setMessages( ( prev ) => [
-						...prev,
-						{ role: 'assistant', content },
-					] );
-					setPendingConfirmation( res.data.confirmation || null );
-					return;
-				}
-
-				if ( res.data.status === 'error' ) {
-					stopAgentPolling();
-					setIsLoading( false );
-					setAgentSteps( [] );
-					setPendingConfirmation( res.data.confirmation || null );
-					setMessages( ( prev ) => [
-						...prev,
-						{ role: 'assistant', content: res.data.response || 'An error occurred.' },
-					] );
-				}
-			} catch ( error ) {
-				pollRef.current.inFlight = false;
+			pollRef.current.sessionId = sessionId;
+			pollRef.current.completed = false;
+			pollRef.current.timeout = setTimeout( () => {
 				stopAgentPolling();
 				setIsLoading( false );
 				setAgentSteps( [] );
-				setPendingConfirmation( getAjaxErrorConfirmation( error ) );
 				setMessages( ( prev ) => [
 					...prev,
-					{ role: 'assistant', content: getAjaxErrorMessage( error, 'An error occurred. Please try again.' ) },
+					{
+						role: 'assistant',
+						content: 'Request timed out. Please try again.',
+					},
 				] );
+			}, AGENT_POLL_MAX_MS );
+
+			const poll = async () => {
+				if ( pollRef.current.inFlight ) {
+					return;
+				}
+				pollRef.current.inFlight = true;
+
+				try {
+					const res = await sendAjax( {
+						action: 'abw_agent_poll',
+						nonce: window.abwEditorChat.nonce,
+						session_id: sessionId,
+					} );
+
+					pollRef.current.inFlight = false;
+
+					if ( ! res.success ) {
+						stopAgentPolling();
+						setIsLoading( false );
+						setAgentSteps( [] );
+						setPendingConfirmation(
+							normalizeConfirmation( res.data?.confirmation )
+						);
+						setMessages( ( prev ) => [
+							...prev,
+							{
+								role: 'assistant',
+								content:
+									res.data?.message || 'An error occurred.',
+							},
+						] );
+						return;
+					}
+
+					setAgentSteps( res.data.steps || [] );
+
+					if ( res.data.status === 'done' ) {
+						if ( pollRef.current.completed ) {
+							return;
+						}
+						pollRef.current.completed = true;
+						stopAgentPolling();
+						setIsLoading( false );
+						setAgentSteps( [] );
+
+						if (
+							res.data.block_actions &&
+							res.data.block_actions.length > 0
+						) {
+							await executeActions( res.data.block_actions );
+						}
+
+						let content = res.data.response || '';
+						if ( ! content || ! String( content ).trim() ) {
+							content = 'Task completed.';
+						}
+						setMessages( ( prev ) => [
+							...prev,
+							{ role: 'assistant', content },
+						] );
+						setPendingConfirmation(
+							normalizeConfirmation( res.data.confirmation )
+						);
+						return;
+					}
+
+					if ( res.data.status === 'error' ) {
+						stopAgentPolling();
+						setIsLoading( false );
+						setAgentSteps( [] );
+						setPendingConfirmation(
+							normalizeConfirmation( res.data.confirmation )
+						);
+						setMessages( ( prev ) => [
+							...prev,
+							{
+								role: 'assistant',
+								content:
+									res.data.response || 'An error occurred.',
+							},
+						] );
+					}
+				} catch ( error ) {
+					pollRef.current.inFlight = false;
+					stopAgentPolling();
+					setIsLoading( false );
+					setAgentSteps( [] );
+					setPendingConfirmation( getAjaxErrorConfirmation( error ) );
+					setMessages( ( prev ) => [
+						...prev,
+						{
+							role: 'assistant',
+							content: getAjaxErrorMessage(
+								error,
+								'An error occurred. Please try again.'
+							),
+						},
+					] );
+				}
+			};
+
+			poll();
+			pollRef.current.interval = setInterval(
+				poll,
+				AGENT_POLL_INTERVAL_MS
+			);
+		},
+		[ stopAgentPolling, executeActions ]
+	);
+
+	// Poll a background job until completion.
+	function startJobPolling( jobInfo, announce = false ) {
+		const token = jobInfo?.job_token;
+		if ( ! token || jobPollRef.current[ token ] ) {
+			return;
+		}
+
+		if ( announce ) {
+			const label = ( jobInfo?.job_type || 'background task' ).replace(
+				/_/g,
+				' '
+			);
+			setMessages( ( prev ) => [
+				...prev,
+				{
+					role: 'assistant',
+					content: `Task queued for background processing (${ label }).`,
+				},
+			] );
+		}
+
+		const poll = async () => {
+			try {
+				const res = await sendAjax( {
+					action: 'abw_check_job_status',
+					nonce: window.abwEditorChat.nonce,
+					job_token: token,
+				} );
+
+				if ( ! res.success ) {
+					return;
+				}
+
+				const data = res.data || {};
+				if ( data.status === 'completed' ) {
+					clearInterval( jobPollRef.current[ token ] );
+					delete jobPollRef.current[ token ];
+					setMessages( ( prev ) => [
+						...prev,
+						{
+							role: 'assistant',
+							content:
+								data.result?.response ||
+								'Background task completed successfully.',
+						},
+					] );
+				} else if ( data.status === 'failed' ) {
+					clearInterval( jobPollRef.current[ token ] );
+					delete jobPollRef.current[ token ];
+					setMessages( ( prev ) => [
+						...prev,
+						{
+							role: 'assistant',
+							content:
+								data.error ||
+								'Background task failed. You can retry it from the Background Jobs page.',
+						},
+					] );
+				}
+			} catch {
+				// Ignore transient polling errors and try again on the next interval.
 			}
 		};
 
 		poll();
-		pollRef.current.interval = setInterval( poll, AGENT_POLL_INTERVAL_MS );
-	}, [ stopAgentPolling, executeActions ] );
+		jobPollRef.current[ token ] = setInterval( poll, 3000 );
+	}
+
+	/**
+	 * Resume any active chat session or background jobs after navigation.
+	 *
+	 * @param {Object} data History payload from the backend.
+	 */
+	function resumeActiveWork( data ) {
+		if (
+			data?.active_session?.status === 'thinking' &&
+			data.active_session.session_id
+		) {
+			setIsLoading( true );
+			setAgentSteps( data.active_session.steps || [] );
+			startAgentPolling( data.active_session.session_id );
+		}
+
+		if ( Array.isArray( data?.active_jobs ) ) {
+			data.active_jobs.forEach( ( jobInfo ) =>
+				startJobPolling( jobInfo, false )
+			);
+		}
+	}
 
 	/**
 	 * Send a message to the AI backend.
 	 *
 	 * @param {string} text User message text.
 	 */
-	const handleSend = useCallback( async ( text ) => {
-		if ( ! text.trim() || isLoading || ! window.abwEditorChat ) {
-			return;
-		}
+	const handleSend = useCallback(
+		async ( text ) => {
+			if ( ! text.trim() || isLoading || ! window.abwEditorChat ) {
+				return;
+			}
 
-		const newMessages = [ ...messages, { role: 'user', content: text } ];
-		setMessages( newMessages );
-		setIsLoading( true );
-		setAgentSteps( [] );
+			const newMessages = [
+				...messages,
+				{ role: 'user', content: text },
+			];
+			setMessages( newMessages );
+			setIsLoading( true );
+			setAgentSteps( [] );
 
-		try {
-			const response = await sendAjax( {
-				action: 'abw_chat_message',
-				nonce: window.abwEditorChat.nonce,
-				message: text,
-				context: JSON.stringify( {
-					screen: 'block-editor',
-					post_id: window.abwEditorChat.postId || 0,
-					post_type: window.abwEditorChat.postType || 'post',
-				} ),
-				editor_context: editorContext,
-				agent_mode: agentMode,
-				history_scope: getHistoryScope(),
-			} );
+			try {
+				const response = await sendAjax( {
+					action: 'abw_chat_message',
+					nonce: window.abwEditorChat.nonce,
+					message: text,
+					context: JSON.stringify( {
+						screen: 'block-editor',
+						post_id: window.abwEditorChat.postId || 0,
+						post_type: window.abwEditorChat.postType || 'post',
+					} ),
+					editor_context: editorContext,
+					agent_mode: agentMode,
+					history_scope: getHistoryScope(),
+				} );
 
-			if ( response.success ) {
-				const data = response.data;
+				if ( response.success ) {
+					const data = response.data;
 
-				if ( data.status === 'thinking' && data.session_id ) {
-					setAgentSteps( data.steps || [] );
-					startAgentPolling( data.session_id );
-					return;
+					if ( data.status === 'thinking' && data.session_id ) {
+						setAgentSteps( data.steps || [] );
+						startAgentPolling( data.session_id );
+						return;
+					}
+
+					setIsLoading( false );
+					stopAgentPolling();
+
+					if ( data.block_actions && data.block_actions.length > 0 ) {
+						await executeActions( data.block_actions );
+					}
+
+					let content = data.response || '';
+					if ( ! content || ! String( content ).trim() ) {
+						content = 'Task completed.';
+					}
+
+					if ( data.background_job ) {
+						setPendingConfirmation(
+							normalizeConfirmation( data.confirmation )
+						);
+						setMessages( ( prev ) => [
+							...prev,
+							{ role: 'assistant', content },
+						] );
+						startJobPolling( data.background_job, false );
+						return;
+					}
+
+					setPendingConfirmation(
+						normalizeConfirmation( data.confirmation )
+					);
+					setMessages( ( prev ) => [
+						...prev,
+						{ role: 'assistant', content },
+					] );
+				} else {
+					setIsLoading( false );
+					stopAgentPolling();
+					setPendingConfirmation(
+						normalizeConfirmation( response.data?.confirmation )
+					);
+					setMessages( ( prev ) => [
+						...prev,
+						{
+							role: 'assistant',
+							content:
+								response.data?.message ||
+								'An error occurred. Please try again.',
+						},
+					] );
 				}
-
+			} catch ( error ) {
 				setIsLoading( false );
 				stopAgentPolling();
-
-				if ( data.block_actions && data.block_actions.length > 0 ) {
-					await executeActions( data.block_actions );
-				}
-
-				let content = data.response || '';
-				if ( ! content || ! String( content ).trim() ) {
-					content = 'Task completed.';
-				}
-				setPendingConfirmation( data.confirmation || null );
+				setAgentSteps( [] );
+				setPendingConfirmation( getAjaxErrorConfirmation( error ) );
 				setMessages( ( prev ) => [
 					...prev,
-					{ role: 'assistant', content },
-				] );
-			} else {
-				setIsLoading( false );
-				stopAgentPolling();
-				setPendingConfirmation( response.data?.confirmation || null );
-				setMessages( ( prev ) => [
-					...prev,
-					{ role: 'assistant', content: response.data?.message || 'An error occurred. Please try again.' },
+					{
+						role: 'assistant',
+						content: getAjaxErrorMessage(
+							error,
+							'An error occurred. Please try again.'
+						),
+					},
 				] );
 			}
-		} catch ( error ) {
-			setIsLoading( false );
-			stopAgentPolling();
-			setAgentSteps( [] );
-			setPendingConfirmation( getAjaxErrorConfirmation( error ) );
-			setMessages( ( prev ) => [
-				...prev,
-				{ role: 'assistant', content: getAjaxErrorMessage( error, 'An error occurred. Please try again.' ) },
-			] );
-		}
-	}, [ messages, isLoading, editorContext, executeActions, startAgentPolling, stopAgentPolling, agentMode ] );
+		},
+		[
+			messages,
+			isLoading,
+			editorContext,
+			executeActions,
+			startAgentPolling,
+			stopAgentPolling,
+			agentMode,
+		]
+	);
 
 	/**
 	 * Confirm or cancel a pending sensitive action.
 	 *
 	 * @param {string} action Action type.
 	 */
-	const handleConfirmationAction = useCallback( async ( action ) => {
-		if ( ! pendingConfirmation || isConfirming ) {
-			return;
-		}
-
-		setIsConfirming( true );
-
-		try {
-			const response = await sendAjax( {
-				action: 'abw_confirmation_action',
-				nonce: window.abwEditorChat.nonce,
-				confirmation_action: action,
-				history_scope: getHistoryScope(),
-			} );
-
-			if ( ! response.success ) {
-				setPendingConfirmation( response.data?.confirmation || pendingConfirmation );
-				setMessages( ( prev ) => [
-					...prev,
-					{ role: 'assistant', content: response.data?.message || 'Unable to finish this action.' },
-				] );
+	const handleConfirmationAction = useCallback(
+		async ( action ) => {
+			if ( ! pendingConfirmation || isConfirming ) {
 				return;
 			}
 
-			setPendingConfirmation( null );
+			setIsConfirming( true );
 
-			if ( response.data.block_actions && response.data.block_actions.length > 0 ) {
-				await executeActions( response.data.block_actions );
+			try {
+				const response = await sendAjax( {
+					action: 'abw_confirmation_action',
+					nonce: window.abwEditorChat.nonce,
+					confirmation_action: action,
+					history_scope: getHistoryScope(),
+				} );
+
+				if ( ! response.success ) {
+					setPendingConfirmation(
+						normalizeConfirmation( response.data?.confirmation ) ||
+							pendingConfirmation
+					);
+					setMessages( ( prev ) => [
+						...prev,
+						{
+							role: 'assistant',
+							content:
+								response.data?.message ||
+								'Unable to finish this action.',
+						},
+					] );
+					return;
+				}
+
+				setPendingConfirmation( null );
+
+				if (
+					response.data.block_actions &&
+					response.data.block_actions.length > 0
+				) {
+					await executeActions( response.data.block_actions );
+				}
+
+				setMessages( ( prev ) => [
+					...prev,
+					{
+						role: 'assistant',
+						content:
+							response.data.response ||
+							( action === 'cancel'
+								? 'Action cancelled.'
+								: 'Action completed.' ),
+					},
+				] );
+			} catch ( error ) {
+				setPendingConfirmation(
+					getAjaxErrorConfirmation( error ) || pendingConfirmation
+				);
+				setMessages( ( prev ) => [
+					...prev,
+					{
+						role: 'assistant',
+						content: getAjaxErrorMessage(
+							error,
+							'Unable to finish this action.'
+						),
+					},
+				] );
+			} finally {
+				setIsConfirming( false );
 			}
-
-			setMessages( ( prev ) => [
-				...prev,
-				{ role: 'assistant', content: response.data.response || ( action === 'cancel' ? 'Action cancelled.' : 'Action completed.' ) },
-			] );
-		} catch ( error ) {
-			setPendingConfirmation( getAjaxErrorConfirmation( error ) || pendingConfirmation );
-			setMessages( ( prev ) => [
-				...prev,
-				{ role: 'assistant', content: getAjaxErrorMessage( error, 'Unable to finish this action.' ) },
-			] );
-		} finally {
-			setIsConfirming( false );
-		}
-	}, [ pendingConfirmation, isConfirming, executeActions ] );
+		},
+		[ pendingConfirmation, isConfirming, executeActions ]
+	);
 
 	/**
 	 * Handle suggestion click.
 	 *
 	 * @param {string} prompt Suggestion prompt text.
 	 */
-	const handleSuggestion = useCallback( ( prompt ) => {
-		handleSend( prompt );
-	}, [ handleSend ] );
+	const handleSuggestion = useCallback(
+		( prompt ) => {
+			handleSend( prompt );
+		},
+		[ handleSend ]
+	);
 
 	/**
 	 * Clear chat history.
 	 */
 	const handleClear = useCallback( () => {
-		if ( ! window.confirm( 'Are you sure you want to clear the chat history?' ) ) {
+		// eslint-disable-next-line no-alert
+		const shouldClear = window.confirm(
+			'Are you sure you want to clear the chat history?'
+		);
+		if ( ! shouldClear ) {
 			return;
 		}
 
@@ -382,7 +629,14 @@ export function Sidebar() {
 					onClick={ handleClear }
 					title="Clear chat"
 				>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						width="16"
+						height="16"
+					>
 						<polyline points="3 6 5 6 21 6" />
 						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
 					</svg>
@@ -426,11 +680,13 @@ export function Sidebar() {
 							value={ agentMode }
 							onChange={ handleAgentModeChange }
 						>
-							{ Object.entries( agentPackages ).map( ( [ key, value ] ) => (
-								<option key={ key } value={ key }>
-									{ value.label }
-								</option>
-							) ) }
+							{ Object.entries( agentPackages ).map(
+								( [ key, value ] ) => (
+									<option key={ key } value={ key }>
+										{ value.label }
+									</option>
+								)
+							) }
 						</select>
 					</div>
 				</>
@@ -476,7 +732,34 @@ function getAjaxErrorMessage( error, fallback ) {
  * @return {Object|null} Confirmation payload.
  */
 function getAjaxErrorConfirmation( error ) {
-	return error?.responseJSON?.data?.confirmation || null;
+	return normalizeConfirmation( error?.responseJSON?.data?.confirmation );
+}
+
+/**
+ * Normalize confirmation payloads so empty arrays/objects do not render.
+ *
+ * @param {Object|Array|null} confirmation Raw confirmation payload.
+ * @return {Object|null} Valid confirmation payload.
+ */
+function normalizeConfirmation( confirmation ) {
+	if (
+		! confirmation ||
+		Array.isArray( confirmation ) ||
+		typeof confirmation !== 'object'
+	) {
+		return null;
+	}
+
+	if (
+		! confirmation.tool &&
+		! confirmation.title &&
+		! confirmation.message &&
+		! Array.isArray( confirmation.details )
+	) {
+		return null;
+	}
+
+	return confirmation;
 }
 
 /**
@@ -485,5 +768,5 @@ function getAjaxErrorConfirmation( error ) {
  * @return {string} History scope identifier.
  */
 function getHistoryScope() {
-	return `editor_${ window.abwEditorChat?.postId || 0 }`;
+	return window.abwEditorChat?.globalHistoryScope || 'admin_global';
 }
