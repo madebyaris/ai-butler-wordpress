@@ -48,7 +48,7 @@ class ABW_Abilities_Registration
         if (function_exists('wp_register_ability_category')) {
             wp_register_ability_category('abw-ai', [
                 'label'       => __('ABW-AI Butler', 'abw-ai'),
-                'description' => __('Advanced WordPress AI management abilities', 'abw-ai'),
+                'description' => __('Advanced AI management abilities for your site', 'abw-ai'),
             ]);
         }
 
