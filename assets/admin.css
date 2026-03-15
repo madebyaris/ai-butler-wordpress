@@ -8,9 +8,9 @@
    Design Tokens
    ========================================================================== */
 :root {
-	--abw-admin-primary: #6366f1;
-	--abw-admin-primary-hover: #4f46e5;
-	--abw-admin-primary-light: #eef2ff;
+	--abw-admin-primary: #0073aa;
+	--abw-admin-primary-hover: #006799;
+	--abw-admin-primary-light: #f0f6fc;
 	--abw-admin-surface: #ffffff;
 	--abw-admin-surface-2: #f8fafc;
 	--abw-admin-surface-3: #f1f5f9;
@@ -47,6 +47,55 @@
 	border-radius: var(--abw-admin-radius);
 	box-shadow: var(--abw-admin-shadow-sm);
 	margin-top: 20px;
+}
+
+.abw-admin-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.abw-admin-card {
+	background: var(--abw-admin-surface-2);
+	border: 1px solid var(--abw-admin-border);
+	border-radius: var(--abw-admin-radius-sm);
+	padding: 18px;
+}
+
+.abw-admin-card h3 {
+	margin: 0 0 8px;
+	font-size: 15px;
+	color: var(--abw-admin-text);
+}
+
+.abw-admin-card p {
+	margin: 0;
+	color: var(--abw-admin-text-2);
+	line-height: 1.5;
+}
+
+.abw-admin-actions {
+	margin-top: 20px;
+}
+
+.abw-connection-status {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 12px;
+	font-weight: 500;
+}
+
+.abw-connection-status.is-loading {
+	color: var(--abw-admin-warning);
+}
+
+.abw-connection-status.is-success {
+	color: var(--abw-admin-success);
+}
+
+.abw-connection-status.is-error {
+	color: var(--abw-admin-error);
 }
 
 .abw-token-form {
@@ -184,7 +233,7 @@
 
 .abw-select:focus {
 	border-color: var(--abw-admin-primary);
-	box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15);
+	box-shadow: 0 0 0 3px rgb(0 115 170 / 0.15);
 	outline: none;
 }
 

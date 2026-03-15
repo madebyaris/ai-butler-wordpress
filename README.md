@@ -2,7 +2,7 @@
 
 **Enhanced for [MiniMax](https://www.minimax.io)**
 
-An AI-powered assistant for WordPress that lives inside your admin dashboard. It can manage posts, users, media, plugins, menus, WooCommerce orders, Elementor layouts, and more -- all through natural language conversation. It also integrates natively with the WordPress Block Editor (Gutenberg) so you can ask it to write, edit, and structure content directly inside the editor.
+An AI-powered assistant for WordPress that lives inside your admin dashboard. It can manage posts, users, media, plugins, themes, updates, menus, WooCommerce orders, Elementor layouts, and more -- all through natural language conversation. It also integrates natively with the WordPress Block Editor (Gutenberg) so you can ask it to write, edit, and structure content directly inside the editor.
 
 ABW-AI is enhanced for **MiniMax** models, taking advantage of their 1M token context window, fast inference speeds, and cost-effective pricing -- making it practical to send full page layouts and long editor contexts to the AI without worrying about token limits or response latency.
 
@@ -41,7 +41,7 @@ ABW-AI sends the full block editor state (every block, its type, attributes, and
 - **100 tokens/second** on highspeed models -- fast responses even with large context
 - **$0.30 / 1M input tokens** -- roughly 8% of the cost of comparable frontier models, practical for frequent use
 - **OpenAI-compatible API** -- works out of the box with ABW-AI's custom provider, no code changes needed
-- **Agentic tool calling** -- reliable function calling for all 50+ WordPress management tools
+- **Agentic tool calling** -- reliable function calling for 90+ WordPress management tools
 - **Vision support** -- M2.5 supports image input, enabling future multimodal workflows
 
 ### Model Variants
@@ -133,7 +133,7 @@ Blocks:
 
 This means even AI models without vision can understand and manipulate your page layout. MiniMax's 1M token context window ensures this representation is never truncated, even for the most complex pages.
 
-### WordPress Management Tools (50+)
+### WordPress Management Tools (90+)
 
 All available as AI tools the assistant can call during conversation:
 
@@ -143,18 +143,37 @@ All available as AI tools the assistant can call during conversation:
 | **Users** | List, get, create, update, delete users |
 | **Media** | List, upload (URL or base64), update, delete media |
 | **Comments** | List, moderate (approve, hold, spam, trash) |
-| **Plugins** | List, activate, deactivate |
-| **Themes** | List, activate |
+| **Plugins** | List, activate, deactivate, check updates, update |
+| **Themes** | List, activate, check updates, update |
 | **Taxonomies** | List taxonomies, create/update/delete terms |
 | **Menus** | Create menus, add/update/delete items, assign locations |
 | **Site Options** | Get/update whitelisted options, reading settings |
 | **Search & Analytics** | Search content, post stats, popular content, recent activity |
 | **Bulk Operations** | Bulk update/delete posts, find & replace, bulk moderate comments |
-| **Site Health** | Health status, plugin/theme update checks |
+| **Site Health** | Health status and diagnostics |
 | **Block Editor** | Insert, replace, update, remove blocks; save post; update title/status |
 | **Block Themes** | List block patterns and template parts |
 | **Elementor** | List/get/update Elementor pages and templates |
 | **WooCommerce** | List/get products and orders, update statuses |
+
+### Update Management (Check + Apply)
+
+ABW-AI can both detect and apply updates for plugins and themes:
+
+- **Check updates**: finds available plugin/theme updates with current and target versions
+- **Apply updates**: upgrades a specific plugin/theme or all available updates
+- **Clear result reporting**: reports what was updated, what was already current, and any failures
+
+Example prompts:
+
+- `Check for plugin and theme updates`
+- `Update the Twenty Twenty-One theme`
+- `Update all available plugin and theme updates`
+
+### Reliable Multi-Step Actions
+
+The assistant uses an agentic multi-step loop for action requests (for example: list -> select -> update/delete).  
+For operational requests, it is designed to complete the action workflow end-to-end rather than stopping after a read-only step.
 
 ### AI Writing & SEO Tools
 

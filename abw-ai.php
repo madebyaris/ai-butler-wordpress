@@ -26,11 +26,15 @@ define( 'ABW_INCLUDES', ABW_PATH . 'includes/' );
 
 // Load core files
 require_once ABW_INCLUDES . 'class-admin.php';
+require_once ABW_INCLUDES . 'class-debug-log.php';
 require_once ABW_INCLUDES . 'class-elementor-rest-api.php';
 require_once ABW_INCLUDES . 'class-abilities-registration.php';
 require_once ABW_INCLUDES . 'class-background-jobs.php';
 require_once ABW_INCLUDES . 'class-ai-router.php';
 require_once ABW_INCLUDES . 'class-ai-tools.php';
+require_once ABW_INCLUDES . 'class-brand-voice.php';
+require_once ABW_INCLUDES . 'class-ai-workflows.php';
+require_once ABW_INCLUDES . 'class-security-tools.php';
 require_once ABW_INCLUDES . 'class-chat-interface.php';
 
 // Register custom cron schedules early (before init).
@@ -45,6 +49,7 @@ function abw_ai_init() {
 	ABW_Abilities_Registration::init();
 	ABW_Background_Jobs::init();
 	ABW_Chat_Interface::init();
+	ABW_AI_Workflows::init();
 }
 add_action( 'plugins_loaded', 'abw_ai_init' );
 
@@ -68,6 +73,9 @@ function abw_ai_activate() {
 
 	// Create background jobs table.
 	ABW_Background_Jobs::create_table();
+
+	// Create debug log directory so it's ready when debug mode is enabled.
+	ABW_Debug_Log::create_log_dir();
 }
 register_activation_hook( __FILE__, 'abw_ai_activate' );
 

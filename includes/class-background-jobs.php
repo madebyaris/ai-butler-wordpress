@@ -530,7 +530,15 @@ class ABW_Background_Jobs {
 				$result = self::process_chat_job( $job_id, $messages, $tools_list, $input_data );
 			} else {
 				// Direct tool execution.
-				$result = ABW_AI_Router::execute_tool( $tool_name, $arguments );
+				$result = ABW_AI_Router::execute_tool(
+					$tool_name,
+					$arguments,
+					[
+						'source'    => 'background_job',
+						'confirmed' => true,
+						'user_id'   => (int) $job->user_id,
+					]
+				);
 			}
 
 			if ( is_wp_error( $result ) ) {
@@ -562,47 +570,37 @@ class ABW_Background_Jobs {
 	 * @return array|WP_Error Result array or error.
 	 */
 	private static function process_chat_job( $job_id, $messages, $tools, $input ) {
-		// Call AI with the background timeout.
-		$response = ABW_AI_Router::chat( $messages, $tools );
+		$provider = $input['provider'] ?? ABW_AI_Router::get_provider();
+		$user_id  = get_current_user_id();
 
-		if ( is_wp_error( $response ) ) {
-			return $response;
+		$result = ABW_Chat_Interface::run_agentic_until_complete(
+			$messages,
+			$tools,
+			$provider,
+			$user_id,
+			false
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
 		}
 
-		$final_response = $response['content'];
-		$tool_results   = [];
+		$final_response = $result['response']['content'] ?? '';
+		if ( '' === trim( $final_response ) ) {
+			$final_response = 'Task completed.';
+		}
 
-		// Handle tool calls.
-		if ( ! empty( $response['tool_calls'] ) ) {
-			foreach ( $response['tool_calls'] as $tool_call ) {
-				$result = ABW_AI_Router::execute_tool( $tool_call['name'], $tool_call['arguments'] );
-				$tool_results[] = [
-					'tool'   => $tool_call['name'],
-					'result' => is_wp_error( $result ) ? $result->get_error_message() : $result,
-				];
-			}
-
-			// Get final response with tool results.
-			$messages[] = [
-				'role'    => 'assistant',
-				'content' => $response['content'],
-			];
-
-			$messages[] = [
-				'role'    => 'user',
-				'content' => 'Tool results: ' . wp_json_encode( $tool_results ),
-			];
-
-			$final_ai_response = ABW_AI_Router::chat( $messages, [] );
-
-			if ( ! is_wp_error( $final_ai_response ) ) {
-				$final_response = $final_ai_response['content'];
-			}
+		if ( ! empty( $result['confirmation'] ) ) {
+			return new WP_Error(
+				'background_confirmation_required',
+				__( 'This background task now requires manual approval before it can continue.', 'abw-ai' )
+			);
 		}
 
 		return [
-			'response'     => $final_response,
-			'tool_results' => $tool_results,
+			'response'      => $final_response,
+			'tool_results'  => $result['all_tool_results'] ?? [],
+			'steps'         => $result['steps'] ?? [],
 		];
 	}
 
